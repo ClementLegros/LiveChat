@@ -31,22 +31,11 @@ namespace LiveChat.Client
 
         private async void StartServer()
         {
-            string settingValue = ConfigurationManager.AppSettings["LiveChatIpSender"];
-                        
-            List<IPAddress> ipAddresses = new List<IPAddress>();
-                        
-            foreach (string ipAdress in settingValue.Split(','))
-            {
-                ipAddresses.Add(IPAddress.Parse(ipAdress));
-            }
-                        
-            List<string> ipList = settingValue.Split(',').ToList();
-                        
             LiveChatServer = new Server.Server();
 
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
             
-            //await Except.Try(() => LiveChatServer.StartServer(ipAddresses, Utils.SafeParseInt(port)));
+            await LiveChatServer.StartServer(Utils.SafeParseInt(port));
         }
 
         private void InitializeFileSystemWatcher()

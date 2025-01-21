@@ -29,6 +29,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(LiveChat));
             this.labelSelectFile = new System.Windows.Forms.Label();
             this.buttonSendFile = new System.Windows.Forms.Button();
             this.openFileDialogLiveChat = new System.Windows.Forms.OpenFileDialog();
@@ -67,7 +68,9 @@
             this.Controls.Add(this.buttonSendFile);
             this.Controls.Add(this.labelSelectFile);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "LiveChat";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "LiveChat Client";
             this.ResumeLayout(false);
             this.PerformLayout();

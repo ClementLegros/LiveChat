@@ -19,25 +19,17 @@ namespace LiveChat.Server
             Listeners = new List<TcpListener>();
         }
 
-        public async Task StartServer(List<IPAddress> ipAddresses, int port)
+        public async Task StartServer(int port)
         {
             Logger.Enter();
             
-            foreach (IPAddress ipAddress in ipAddresses)
-            {
-                TcpListener listener = new TcpListener(ipAddress, port);
-                listener.Start();
-                Listeners.Add(listener);
-            }
-            
-            List<Task> acceptTasks = new List<Task>();
-            
-            foreach (TcpListener listener in Listeners)
-            {
-                acceptTasks.Add(AcceptClientsAsync(listener));
-            }
+            TcpListener listener = new TcpListener(IPAddress.Any, port);
+            listener.Start();
+            Listeners.Add(listener);
+
+            Task listenerTask = AcceptClientsAsync(listener);  
            
-            await Task.WhenAll(acceptTasks);
+            await Task.WhenAll(listenerTask);
             
             Logger.Leave();
         }
