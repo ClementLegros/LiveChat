@@ -21,12 +21,43 @@ namespace LiveChat.Client
     {
         private Server.Server LiveChatServer { get; set; }
         private FileSystemWatcher Watcher { get; set; }
+        private List<User> Users { get; set; }
         
         public LiveChat()
         {
             InitializeComponent();
             InitializeFileSystemWatcher();
             StartServer();
+            InitializeListBoxUsers();
+        }
+
+        private void InitializeListBoxUsers()
+        {
+            Logger.Enter();
+            
+            string ipConfigString = ConfigurationManager.AppSettings["LiveChatIpSender"];
+            
+            List<string> ipList = ipConfigString.Split(',').ToList();
+
+            Users = new List<User>();
+            
+            foreach (string ip in ipList)
+            {
+                string[] ipSplit = ip.Split('-');
+                
+                if(ipSplit.Length == 0) continue;
+                
+                Users.Add(new User
+                {
+                    Username = ipSplit[0],
+                    IpAddress = ipSplit[1]
+                });
+            }
+            
+            listBoxUsers.DataSource = Users;
+            listBoxUsers.SelectedItem = null;
+            
+            Logger.Leave();
         }
 
         private async void StartServer()
@@ -91,12 +122,36 @@ namespace LiveChat.Client
             if (openFileDialogLiveChat.ShowDialog() != DialogResult.OK)
             {
                 MessageBox.Show("No file selected", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
             string filePath = openFileDialogLiveChat.FileName;
-            string settingValue = ConfigurationManager.AppSettings["LiveChatIpSender"];
+
+            List<string> ipList = new List<string>();
+
+            if (listBoxUsers.SelectedItems.Count == 0)
+            {
+                string ipConfigString = ConfigurationManager.AppSettings["LiveChatIpSender"];
+                List<string> ipListConfig = ipConfigString.Split(',').ToList();
+
+                foreach (string ipConfig in ipListConfig)
+                {
+                    string[] ipSplit = ipConfig.Split('-');
+                    
+                    if(ipSplit.Length == 0) continue;
+                    
+                    ipList.Add(ipSplit[1]);
+                }
+            }
+            else
+            {
+                List<User> users = listBoxUsers.SelectedItems.Cast<User>().ToList();
+                foreach (User user in users)
+                {
+                    ipList.Add(user.IpAddress);
+                }
+            }
   
-            List<string> ipList = settingValue.Split(',').ToList();
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
             
             await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port)); 
