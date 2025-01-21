@@ -5,6 +5,7 @@ using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
+using System.Excepts;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -25,23 +26,27 @@ namespace LiveChat.Client
         {
             InitializeComponent();
             InitializeFileSystemWatcher();
+            StartServer();
+        }
 
+        private async void StartServer()
+        {
             string settingValue = ConfigurationManager.AppSettings["LiveChatIpSender"];
-            
+                        
             List<IPAddress> ipAddresses = new List<IPAddress>();
-            
+                        
             foreach (string ipAdress in settingValue.Split(','))
             {
                 ipAddresses.Add(IPAddress.Parse(ipAdress));
             }
-            
+                        
             List<string> ipList = settingValue.Split(',').ToList();
-            
+                        
             LiveChatServer = new Server.Server();
-            
-            string port = ConfigurationManager.AppSettings["LiveChatPort"];
 
-            LiveChatServer.StartServer(ipAddresses, Utils.SafeParseInt(port));
+            string port = ConfigurationManager.AppSettings["LiveChatPort"];
+            
+            //await Except.Try(() => LiveChatServer.StartServer(ipAddresses, Utils.SafeParseInt(port)));
         }
 
         private void InitializeFileSystemWatcher()
@@ -91,13 +96,15 @@ namespace LiveChat.Client
         private async void buttonSendFile_Click(object sender, EventArgs e)
         {
             Logger.Enter();
+
+            openFileDialogLiveChat.FileName = "";
             
             if (openFileDialogLiveChat.ShowDialog() != DialogResult.OK)
             {
                 MessageBox.Show("No file selected", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
-            string filePath = openFileDialogLiveChat.SafeFileName;
+            string filePath = openFileDialogLiveChat.FileName;
             string settingValue = ConfigurationManager.AppSettings["LiveChatIpSender"];
   
             List<string> ipList = settingValue.Split(',').ToList();
