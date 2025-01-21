@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiveChat.Client", "LiveChat.Client\LiveChat.Client.csproj", "{77B4C11E-A13B-4ECB-8C1F-00452A0316E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiveChat.Server", "LiveChat.Server\LiveChat.Server.csproj", "{B7CB9EC5-1C61-48C8-9850-5AF9ABB42460}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LiveChat.Utils", "LiveChat.Utils\LiveChat.Utils.csproj", "{12317A5A-3ED9-4A60-B393-FA1B9C07B4C1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{77B4C11E-A13B-4ECB-8C1F-00452A0316E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77B4C11E-A13B-4ECB-8C1F-00452A0316E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77B4C11E-A13B-4ECB-8C1F-00452A0316E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77B4C11E-A13B-4ECB-8C1F-00452A0316E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B7CB9EC5-1C61-48C8-9850-5AF9ABB42460}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7CB9EC5-1C61-48C8-9850-5AF9ABB42460}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7CB9EC5-1C61-48C8-9850-5AF9ABB42460}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7CB9EC5-1C61-48C8-9850-5AF9ABB42460}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12317A5A-3ED9-4A60-B393-FA1B9C07B4C1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12317A5A-3ED9-4A60-B393-FA1B9C07B4C1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12317A5A-3ED9-4A60-B393-FA1B9C07B4C1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12317A5A-3ED9-4A60-B393-FA1B9C07B4C1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
