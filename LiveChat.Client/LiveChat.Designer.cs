@@ -35,13 +35,15 @@
             this.openFileDialogLiveChat = new System.Windows.Forms.OpenFileDialog();
             this.listBoxUsers = new System.Windows.Forms.ListBox();
             this.label1 = new System.Windows.Forms.Label();
+            this.labelInsertCaption = new System.Windows.Forms.Label();
+            this.textBoxCaption = new System.Windows.Forms.TextBox();
             this.SuspendLayout();
             // 
             // labelSelectFile
             // 
             this.labelSelectFile.AutoSize = true;
             this.labelSelectFile.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.labelSelectFile.Location = new System.Drawing.Point(12, 228);
+            this.labelSelectFile.Location = new System.Drawing.Point(14, 348);
             this.labelSelectFile.Name = "labelSelectFile";
             this.labelSelectFile.Size = new System.Drawing.Size(137, 25);
             this.labelSelectFile.TabIndex = 0;
@@ -50,7 +52,7 @@
             // buttonSendFile
             // 
             this.buttonSendFile.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.buttonSendFile.Location = new System.Drawing.Point(12, 271);
+            this.buttonSendFile.Location = new System.Drawing.Point(7, 376);
             this.buttonSendFile.Name = "buttonSendFile";
             this.buttonSendFile.Size = new System.Drawing.Size(355, 75);
             this.buttonSendFile.TabIndex = 1;
@@ -83,11 +85,31 @@
             this.label1.TabIndex = 3;
             this.label1.Text = "Select Users";
             // 
+            // labelInsertCaption
+            // 
+            this.labelInsertCaption.AutoSize = true;
+            this.labelInsertCaption.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.labelInsertCaption.Location = new System.Drawing.Point(14, 227);
+            this.labelInsertCaption.Name = "labelInsertCaption";
+            this.labelInsertCaption.Size = new System.Drawing.Size(93, 25);
+            this.labelInsertCaption.TabIndex = 4;
+            this.labelInsertCaption.Text = "Caption";
+            // 
+            // textBoxCaption
+            // 
+            this.textBoxCaption.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.textBoxCaption.Location = new System.Drawing.Point(19, 255);
+            this.textBoxCaption.Name = "textBoxCaption";
+            this.textBoxCaption.Size = new System.Drawing.Size(348, 26);
+            this.textBoxCaption.TabIndex = 5;
+            // 
             // LiveChat
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(391, 392);
+            this.ClientSize = new System.Drawing.Size(391, 495);
+            this.Controls.Add(this.textBoxCaption);
+            this.Controls.Add(this.labelInsertCaption);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.listBoxUsers);
             this.Controls.Add(this.buttonSendFile);
@@ -109,5 +131,9 @@
         private System.Windows.Forms.OpenFileDialog openFileDialogLiveChat;
         private System.Windows.Forms.ListBox listBoxUsers;
         private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.Label labelCaption;
+        private System.Windows.Forms.TextBox textBox1;
+        private System.Windows.Forms.Label labelInsertCaption;
+        private System.Windows.Forms.TextBox textBoxCaption;
     }
 }

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
-using System.Dynamic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
