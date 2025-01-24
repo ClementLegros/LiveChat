@@ -5,6 +5,7 @@ using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Excepts;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,8 @@ namespace LiveChat.Client
         private Server.Server LiveChatServer { get; set; }
         private FileSystemWatcher Watcher { get; set; }
         private List<User> Users { get; set; }
+        private string LiveChatFolderPath { get; set; }
+        private string LiveChatSwapFolderPath { get; set; }
         
         public LiveChat()
         {
@@ -71,16 +74,16 @@ namespace LiveChat.Client
 
         private void InitializeFileSystemWatcher()
         {
-            string liveChatFolderPath = Path.GetTempPath() + @"LiveChat\";
+            LiveChatFolderPath = Path.GetTempPath() + @"LiveChat\";
 
-            if (!Directory.Exists(liveChatFolderPath))
+            if (!Directory.Exists(LiveChatFolderPath))
             {
-                Directory.CreateDirectory(liveChatFolderPath);
+                Directory.CreateDirectory(LiveChatFolderPath);
             }
 
             Watcher = new FileSystemWatcher
             {
-                Path = liveChatFolderPath,
+                Path = LiveChatFolderPath,
                 NotifyFilter = NotifyFilters.LastAccess | NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
                 Filter = "*.*",
                 IncludeSubdirectories = true,
@@ -91,6 +94,13 @@ namespace LiveChat.Client
             Watcher.Error += OnError;
 
             Watcher.EnableRaisingEvents = true;
+
+            LiveChatSwapFolderPath = Path.GetTempPath() + @"LiveChatSwap\";
+
+            if(!Directory.Exists(LiveChatSwapFolderPath))
+            {
+                Directory.CreateDirectory(LiveChatSwapFolderPath);
+            }    
         }
 
         private void OnLiveChatFolderChanged(object source, FileSystemEventArgs e)
@@ -127,6 +137,20 @@ namespace LiveChat.Client
 
             string filePath = openFileDialogLiveChat.FileName;
 
+            if(!string.IsNullOrEmpty(textBoxCaption.Text))
+            {
+                string directory = LiveChatSwapFolderPath;
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
+                string extension = Path.GetExtension(filePath);
+                
+                string newFileName = fileNameWithoutExtension+ $"-text={textBoxCaption.Text}" + extension;
+                string newFilePath = Path.Combine(directory, newFileName);
+                
+                File.Copy(filePath, newFilePath);
+                
+                filePath = newFilePath;
+            }
+
             List<string> ipList = new List<string>();
 
             if (listBoxUsers.SelectedItems.Count == 0)
@@ -154,7 +178,7 @@ namespace LiveChat.Client
   
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
             
-            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port)); 
+            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath); 
             
             Logger.Leave();
         }
@@ -177,14 +201,45 @@ namespace LiveChat.Client
             mediaForm.TopMost = true;
             mediaForm.FormBorderStyle = FormBorderStyle.None;
             mediaForm.StartPosition = FormStartPosition.CenterScreen;
-            
+            mediaForm.AllowTransparency = true;
 
+            string caption = null;
+
+            if(filePath.Contains("text="))
+            {
+                string[] filePathSplit = filePath.Split('=');
+                caption = filePathSplit[1];
+                caption = caption.Split('.')[0]; // Enlever l'extension du fichier
+            }
+            
             // Create a PictureBox to display the image or GIF
             PictureBox pictureBox = new PictureBox();
             pictureBox.Dock = DockStyle.Fill;
             pictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureBox.ImageLocation = filePath;
+            pictureBox.BackColor = Color.Transparent;
             mediaForm.Controls.Add(pictureBox);
+
+            if (!string.IsNullOrEmpty(caption))
+            {
+                OutlineLabel captionLabel = new OutlineLabel();
+                captionLabel.Text = caption;
+                
+                captionLabel.AutoSize = true;
+                captionLabel.TextAlign = ContentAlignment.MiddleCenter;
+                captionLabel.ForeColor = Color.White;
+                captionLabel.BackColor = Color.Transparent;                                 
+                captionLabel.Font = new Font("Arial", 25, FontStyle.Bold);
+                
+                // Calculate position - moved down by 20% of the form height
+                captionLabel.Location = new Point(
+                    (mediaForm.ClientSize.Width - captionLabel.PreferredWidth) / 2,
+                    (int)((mediaForm.ClientSize.Height - captionLabel.PreferredHeight) * 0.7) // Changed from 0.5 (center) to 0.7 (lower)
+                );
+                
+                mediaForm.Controls.Add(captionLabel);
+                captionLabel.BringToFront();
+            }
 
             // Create and start a timer to close the form after a few seconds
             Timer timer = new Timer();
@@ -196,7 +251,6 @@ namespace LiveChat.Client
             };
             timer.Start();
 
-            // Show the form
             mediaForm.Show(); 
         }
 
@@ -242,6 +296,55 @@ namespace LiveChat.Client
         {
             Watcher.Dispose();
             base.OnFormClosing(e);
+        }
+    }
+    
+    public class OutlineLabel : Label
+    {
+        public OutlineLabel()
+        {
+            this.SetStyle(ControlStyles.Opaque |
+                         ControlStyles.OptimizedDoubleBuffer |
+                         ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.ResizeRedraw |
+                         ControlStyles.UserPaint, true);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            string text = this.Text;
+            Font font = this.Font;
+            Rectangle bounds = this.ClientRectangle;
+
+            using (GraphicsPath path = GetStringPath(text, font, bounds, new StringFormat()))
+            {
+                using (Pen pen = new Pen(Color.Black, 2))
+                {
+                    e.Graphics.DrawPath(pen, path);
+                }
+                using (Brush brush = new SolidBrush(this.ForeColor))
+                {
+                    e.Graphics.FillPath(brush, path);
+                }
+            }
+        }
+
+        private GraphicsPath GetStringPath(string text, Font font, Rectangle bounds, StringFormat format)
+        {
+            GraphicsPath path = new GraphicsPath();
+            path.AddString(
+                text,
+                font.FontFamily,
+                (int)font.Style,
+                font.Size * 1.333f,
+                bounds,
+                format
+            );
+            return path;
         }
     }
 }
