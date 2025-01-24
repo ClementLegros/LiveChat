@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Excepts;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -76,7 +77,7 @@ namespace LiveChat.Server
                     await stream.CopyToAsync(ms);
                     byte[] fileBytes = ms.ToArray();
                     string fileType = GetFileType(fileBytes);
-                    string randomFileName = caption == null ? $"{Guid.NewGuid()}.{fileType}" : $"{Guid.NewGuid()}-text={caption}.{fileName}";
+                    string randomFileName = caption == null ? $"{Guid.NewGuid()}.{fileType}" : $"{Guid.NewGuid()}-text={caption}.{fileType}";
 
                     string liveChatFolderPath = Path.GetTempPath() + $@"LiveChat\{randomFileName}";
                     

@@ -37,6 +37,8 @@
             this.label1 = new System.Windows.Forms.Label();
             this.labelInsertCaption = new System.Windows.Forms.Label();
             this.textBoxCaption = new System.Windows.Forms.TextBox();
+            this.pictureBoxAmelie = new System.Windows.Forms.PictureBox();
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxAmelie)).BeginInit();
             this.SuspendLayout();
             // 
             // labelSelectFile
@@ -104,11 +106,22 @@
             this.textBoxCaption.Size = new System.Drawing.Size(348, 26);
             this.textBoxCaption.TabIndex = 5;
             // 
+            // pictureBoxAmelie
+            // 
+            this.pictureBoxAmelie.Image = ((System.Drawing.Image)(resources.GetObject("pictureBoxAmelie.Image")));
+            this.pictureBoxAmelie.Location = new System.Drawing.Point(394, 12);
+            this.pictureBoxAmelie.Name = "pictureBoxAmelie";
+            this.pictureBoxAmelie.Size = new System.Drawing.Size(561, 471);
+            this.pictureBoxAmelie.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
+            this.pictureBoxAmelie.TabIndex = 6;
+            this.pictureBoxAmelie.TabStop = false;
+            // 
             // LiveChat
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(391, 495);
+            this.ClientSize = new System.Drawing.Size(971, 495);
+            this.Controls.Add(this.pictureBoxAmelie);
             this.Controls.Add(this.textBoxCaption);
             this.Controls.Add(this.labelInsertCaption);
             this.Controls.Add(this.label1);
@@ -119,7 +132,8 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "LiveChat";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "LiveChat Client";
+            this.Text = "  ";
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxAmelie)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -134,5 +148,6 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label labelInsertCaption;
         private System.Windows.Forms.TextBox textBoxCaption;
+        private System.Windows.Forms.PictureBox pictureBoxAmelie;
     }
 }

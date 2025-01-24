@@ -25,6 +25,7 @@ namespace LiveChat.Client
         private List<User> Users { get; set; }
         private string LiveChatFolderPath { get; set; }
         private string LiveChatSwapFolderPath { get; set; }
+        private Form CurrentMediaForm { get; set; }
         
         public LiveChat()
         {
@@ -32,6 +33,7 @@ namespace LiveChat.Client
             InitializeFileSystemWatcher();
             StartServer();
             InitializeListBoxUsers();
+            CleanupLiveChatSwapFolder();
         }
 
         private void InitializeListBoxUsers()
@@ -180,11 +182,19 @@ namespace LiveChat.Client
             
             await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath); 
             
+            CleanupLiveChatSwapFolder();
+            
             Logger.Leave();
         }
 
         private void DisplayImage(string filePath)
         {
+            if (CurrentMediaForm != null && !CurrentMediaForm.IsDisposed)
+            {
+                CurrentMediaForm.Close();
+                CurrentMediaForm.Dispose();
+            }
+
             Image image = Image.FromFile(filePath);
             
             Size imageSize = image.Size;
@@ -197,53 +207,64 @@ namespace LiveChat.Client
             
             // Create a new form dynamically
             Form mediaForm = new Form();
+            CurrentMediaForm = mediaForm;
             mediaForm.Size = new System.Drawing.Size(windowsWidth, windowsHeight);
             mediaForm.TopMost = true;
             mediaForm.FormBorderStyle = FormBorderStyle.None;
             mediaForm.StartPosition = FormStartPosition.CenterScreen;
             mediaForm.AllowTransparency = true;
 
-            string caption = null;
+            // Create a panel to organize controls vertically
+            Panel mainPanel = new Panel();
+            mainPanel.Dock = DockStyle.Fill;
+            mainPanel.AutoSize = true;
+            mediaForm.Controls.Add(mainPanel);
 
-            if(filePath.Contains("text="))
-            {
-                string[] filePathSplit = filePath.Split('=');
-                caption = filePathSplit[1];
-                caption = caption.Split('.')[0]; // Enlever l'extension du fichier
-            }
-            
             // Create a PictureBox to display the image or GIF
             PictureBox pictureBox = new PictureBox();
             pictureBox.Dock = DockStyle.Fill;
             pictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureBox.ImageLocation = filePath;
             pictureBox.BackColor = Color.Transparent;
-            mediaForm.Controls.Add(pictureBox);
+            mainPanel.Controls.Add(pictureBox);
+
+            string caption = null;
+            if(filePath.Contains("text="))
+            {
+                string[] filePathSplit = filePath.Split('=');
+                caption = filePathSplit[1];
+                caption = caption.Split('.')[0];
+            }
 
             if (!string.IsNullOrEmpty(caption))
             {
+                Panel captionPanel = new Panel();
+                captionPanel.Dock = DockStyle.Bottom;
+                captionPanel.Height = 40;
+                captionPanel.BackColor = Color.FromArgb(64, 0, 0, 0);
+                mainPanel.Controls.Add(captionPanel);
+
                 OutlineLabel captionLabel = new OutlineLabel();
                 captionLabel.Text = caption;
-                
+                captionLabel.Font = new Font("Arial", 14, FontStyle.Bold);
+                captionLabel.ForeColor = Color.White;
                 captionLabel.AutoSize = true;
                 captionLabel.TextAlign = ContentAlignment.MiddleCenter;
-                captionLabel.ForeColor = Color.White;
-                captionLabel.BackColor = Color.Transparent;                                 
-                captionLabel.Font = new Font("Arial", 25, FontStyle.Bold);
                 
-                // Calculate position - moved down by 20% of the form height
                 captionLabel.Location = new Point(
-                    (mediaForm.ClientSize.Width - captionLabel.PreferredWidth) / 2,
-                    (int)((mediaForm.ClientSize.Height - captionLabel.PreferredHeight) * 0.7) // Changed from 0.5 (center) to 0.7 (lower)
+                    (captionPanel.Width - TextRenderer.MeasureText(caption, captionLabel.Font).Width) / 2,
+                    (captionPanel.Height - captionLabel.Height) / 2
                 );
                 
-                mediaForm.Controls.Add(captionLabel);
-                captionLabel.BringToFront();
+                captionPanel.Controls.Add(captionLabel);
             }
 
-            // Create and start a timer to close the form after a few seconds
+            int displayDuration = Utils.SafeParseInt(ConfigurationManager.AppSettings["LiveChatPort"]) * 1000;
+            
+            if (displayDuration == 0) displayDuration = 8000;
+            
             Timer timer = new Timer();
-            timer.Interval = 8000; // Display for 3 seconds
+            timer.Interval = displayDuration;
             timer.Tick += (s, args) =>
             {
                 timer.Stop();
@@ -256,8 +277,15 @@ namespace LiveChat.Client
 
         private void DisplayVideo(string filePath)
         {
+            if (CurrentMediaForm != null && !CurrentMediaForm.IsDisposed)
+            {
+                CurrentMediaForm.Close();
+                CurrentMediaForm.Dispose();
+            }
+
             // Create a new form dynamically
             Form mediaForm = new Form();
+            CurrentMediaForm = mediaForm;
             mediaForm.Size = new System.Drawing.Size(800, 600);
             mediaForm.TopMost = true; // Make the form stay on top
             mediaForm.FormBorderStyle = FormBorderStyle.None;
@@ -286,14 +314,38 @@ namespace LiveChat.Client
             mediaForm.Show();
         }
 
+        private void CleanupLiveChatSwapFolder()
+        {
+            Logger.Enter();
+
+            Except.Try(() =>
+            {
+                string[] files = Directory.GetFiles(LiveChatSwapFolderPath);
+                foreach (string file in files)
+                {
+                    File.Delete(file);
+                }
+            }).Catch((Exception e) =>
+            {
+                Logger.Error(e.Message);
+            });
+            
+            Logger.Leave();
+        }
+
         private void OnError(object sender, ErrorEventArgs e)
         {
-            MessageBox.Show($"An error occurred: {e.GetException().Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            Console.WriteLine($"An error occurred: {e.GetException().Message}");
+            Logger.Error($"An error occurred: {e.GetException().Message}");
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (CurrentMediaForm != null && !CurrentMediaForm.IsDisposed)
+            {
+                CurrentMediaForm.Close();
+                CurrentMediaForm.Dispose();
+            }
+            
             Watcher.Dispose();
             base.OnFormClosing(e);
         }
