@@ -244,7 +244,7 @@ namespace LiveChat.Client
                 captionPanel.BackColor = Color.FromArgb(64, 0, 0, 0);
                 mainPanel.Controls.Add(captionPanel);
 
-                OutlineLabel captionLabel = new OutlineLabel();
+                Label captionLabel = new Label();
                 captionLabel.Text = caption;
                 captionLabel.Font = new Font("Arial", 14, FontStyle.Bold);
                 captionLabel.ForeColor = Color.White;
@@ -348,55 +348,6 @@ namespace LiveChat.Client
             
             Watcher.Dispose();
             base.OnFormClosing(e);
-        }
-    }
-    
-    public class OutlineLabel : Label
-    {
-        public OutlineLabel()
-        {
-            this.SetStyle(ControlStyles.Opaque |
-                         ControlStyles.OptimizedDoubleBuffer |
-                         ControlStyles.AllPaintingInWmPaint |
-                         ControlStyles.ResizeRedraw |
-                         ControlStyles.UserPaint, true);
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            e.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-            string text = this.Text;
-            Font font = this.Font;
-            Rectangle bounds = this.ClientRectangle;
-
-            using (GraphicsPath path = GetStringPath(text, font, bounds, new StringFormat()))
-            {
-                using (Pen pen = new Pen(Color.Black, 2))
-                {
-                    e.Graphics.DrawPath(pen, path);
-                }
-                using (Brush brush = new SolidBrush(this.ForeColor))
-                {
-                    e.Graphics.FillPath(brush, path);
-                }
-            }
-        }
-
-        private GraphicsPath GetStringPath(string text, Font font, Rectangle bounds, StringFormat format)
-        {
-            GraphicsPath path = new GraphicsPath();
-            path.AddString(
-                text,
-                font.FontFamily,
-                (int)font.Style,
-                font.Size * 1.333f,
-                bounds,
-                format
-            );
-            return path;
         }
     }
 }
