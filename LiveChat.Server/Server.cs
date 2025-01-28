@@ -7,12 +7,27 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using CalSup.Utilities;
+using System.Security.Cryptography;
 
 namespace LiveChat.Server
 {
     public class Server
     {
         private List<TcpListener> Listeners { get; set; }
+
+        private static readonly byte[] AesKey = new byte[] 
+        { 
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+            0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+            0x17, 0x18, 0x19, 0x20, 0x21, 0x22, 0x23, 0x24,
+            0x25, 0x26, 0x27, 0x28, 0x29, 0x30, 0x31, 0x32
+        };
+        
+        private static readonly byte[] AesIV = new byte[] 
+        { 
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+            0x09, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16
+        };
 
         public Server()
         {
@@ -75,7 +90,8 @@ namespace LiveChat.Server
                 using (MemoryStream ms = new MemoryStream())
                 {
                     await stream.CopyToAsync(ms);
-                    byte[] fileBytes = ms.ToArray();
+                    byte[] encryptedBytes = ms.ToArray();
+                    byte[] fileBytes = DecryptData(encryptedBytes);
                     string fileType = GetFileType(fileBytes);
                     string randomFileName = caption == null ? $"{Guid.NewGuid()}.{fileType}" : $"{Guid.NewGuid()}-text={caption}.{fileType}";
 
@@ -108,12 +124,13 @@ namespace LiveChat.Server
                 {
                     byte[] fileNameBytes = Encoding.UTF8.GetBytes(fileName);
                     byte[] fileNameLength = BitConverter.GetBytes(fileNameBytes.Length);
+                    byte[] encryptedFileBytes = EncryptData(fileBytes);
                     
                     await stream.WriteAsync(fileNameLength, 0, 4);
                     await stream.WriteAsync(fileNameBytes, 0, fileNameBytes.Length);
-                    await stream.WriteAsync(fileBytes, 0, fileBytes.Length);
+                    await stream.WriteAsync(encryptedFileBytes, 0, encryptedFileBytes.Length);
                     
-                    Logger.Info($"File sent to {ipAddress}:{port}");
+                    Logger.Info($"Encrypted file sent to {ipAddress}:{port}");
                 }
             }
         }
@@ -137,6 +154,44 @@ namespace LiveChat.Server
                     return "mp4";
             }
             return "unknown";
+        }
+
+        private byte[] EncryptData(byte[] data)
+        {
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = AesKey;
+                aes.IV = AesIV;
+
+                using (MemoryStream msEncrypt = new MemoryStream())
+                {
+                    using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, aes.CreateEncryptor(), CryptoStreamMode.Write))
+                    {
+                        csEncrypt.Write(data, 0, data.Length);
+                        csEncrypt.FlushFinalBlock();
+                    }
+                    return msEncrypt.ToArray();
+                }
+            }
+        }
+
+        private byte[] DecryptData(byte[] encryptedData)
+        {
+            using (Aes aes = Aes.Create())
+            {
+                aes.Key = AesKey;
+                aes.IV = AesIV;
+
+                using (MemoryStream msDecrypt = new MemoryStream())
+                {
+                    using (CryptoStream csDecrypt = new CryptoStream(msDecrypt, aes.CreateDecryptor(), CryptoStreamMode.Write))
+                    {
+                        csDecrypt.Write(encryptedData, 0, encryptedData.Length);
+                        csDecrypt.FlushFinalBlock();
+                    }
+                    return msDecrypt.ToArray();
+                }
+            }
         }
     }
 }

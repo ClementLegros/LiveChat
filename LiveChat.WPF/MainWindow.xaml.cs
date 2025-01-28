@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using CalSup.Utilities;
 using CalSup.Utilities.Excepts;
 using Microsoft.Win32;
+using System.Threading.Tasks;
 
 namespace LiveChat.WPF
 {
@@ -22,6 +23,8 @@ namespace LiveChat.WPF
         private string LiveChatFolderPath { get; set; }
         private string LiveChatSwapFolderPath { get; set; }
         private Window CurrentMediaWindow { get; set; }
+        private Queue<string> MediaQueue { get; set; }
+        private bool IsDisplayingMedia { get; set; }
 
         public MainWindow()
         {
@@ -30,6 +33,8 @@ namespace LiveChat.WPF
             StartServer();
             InitializeListBoxUsers();
             CleanupLiveChatSwapFolder();
+            MediaQueue = new Queue<string>();
+            IsDisplayingMedia = false;
             
             // Load Amelie image if needed
             // pictureBoxAmelie.Source = new BitmapImage(new Uri("path_to_amelie_image.png", UriKind.Relative));
@@ -80,9 +85,53 @@ namespace LiveChat.WPF
             }
 
             string filePath = openFileDialog.FileName;
+            
+            if(!string.IsNullOrEmpty(textBoxCaption.Text))
+            {
+                string directory = LiveChatSwapFolderPath;
+                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
+                string extension = Path.GetExtension(filePath);
+                
+                string newFileName = fileNameWithoutExtension+ $"-text={textBoxCaption.Text}" + extension;
+                string newFilePath = Path.Combine(directory, newFileName);
+                
+                File.Copy(filePath, newFilePath);
+                
+                filePath = newFilePath;
+            }
 
-            // Rest of the send file logic remains similar
-            // Just adapt the UI elements to WPF equivalents
+            List<string> ipList = new List<string>();
+
+            if (listBoxUsers.SelectedItems.Count == 0)
+            {
+                string ipConfigString = ConfigurationManager.AppSettings["LiveChatIpSender"];
+                List<string> ipListConfig = ipConfigString.Split(',').ToList();
+
+                foreach (string ipConfig in ipListConfig)
+                {
+                    string[] ipSplit = ipConfig.Split('-');
+                    
+                    if(ipSplit.Length == 0) continue;
+                    
+                    ipList.Add(ipSplit[1]);
+                }
+            }
+            else
+            {
+                List<User> users = listBoxUsers.SelectedItems.Cast<User>().ToList();
+                foreach (User user in users)
+                {
+                    ipList.Add(user.IpAddress);
+                }
+            }
+  
+            string port = ConfigurationManager.AppSettings["LiveChatPort"];
+            
+            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath); 
+            
+            CleanupLiveChatSwapFolder();
+            
+            Logger.Leave();
         }
 
         private void InitializeFileSystemWatcher()
@@ -119,24 +168,56 @@ namespace LiveChat.WPF
 
         private void OnLiveChatFolderChanged(object source, FileSystemEventArgs e)
         {
-            // Update UI on the main thread using Dispatcher
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 string filePath = e.FullPath;
-
-                if (filePath.EndsWith(".mp4"))
+                MediaQueue.Enqueue(filePath);
+                if (!IsDisplayingMedia)
                 {
-                    DisplayVideo(filePath); 
-                }
-                else
-                {
-                    DisplayImage(filePath);
+                    ProcessNextMedia();
                 }
             }));
         }
 
-        private void DisplayImage(string filePath)
+        private async void ProcessNextMedia()
         {
+            if (MediaQueue.Count == 0 || IsDisplayingMedia)
+            {
+                return;
+            }
+
+            IsDisplayingMedia = true;
+            string filePath = MediaQueue.Dequeue();
+
+            try
+            {
+                if (filePath.EndsWith(".mp4"))
+                {
+                    await DisplayVideo(filePath);
+                }
+                else if (filePath.EndsWith(".gif"))
+                {
+                    await DisplayGif(filePath);
+                }
+                else
+                {
+                    await DisplayImage(filePath);
+                }
+            }
+            finally
+            {
+                IsDisplayingMedia = false;
+                if (MediaQueue.Count > 0)
+                {
+                    ProcessNextMedia();
+                }
+            }
+        }
+
+        private Task DisplayImage(string filePath)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
             try
             {
                 if (CurrentMediaWindow != null)
@@ -221,6 +302,7 @@ namespace LiveChat.WPF
                     timer.Stop();
                     imageWindow.Close();
                     CurrentMediaWindow = null;
+                    tcs.SetResult(true);
                 };
 
                 timer.Start();
@@ -229,11 +311,16 @@ namespace LiveChat.WPF
             {
                 Logger.Error($"Error displaying image: {ex.Message}");
                 MessageBox.Show($"Error displaying image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                tcs.SetException(ex);
             }
+
+            return tcs.Task;
         }
 
-        private void DisplayVideo(string filePath)
+        private Task DisplayVideo(string filePath)
         {
+            var tcs = new TaskCompletionSource<bool>();
+
             try
             {
                 if (CurrentMediaWindow != null)
@@ -265,7 +352,7 @@ namespace LiveChat.WPF
                 var mediaElement = new MediaElement
                 {
                     Source = new Uri(filePath),
-                    LoadedBehavior = MediaState.Play,
+                    LoadedBehavior = MediaState.Manual,
                     UnloadedBehavior = MediaState.Close,
                     Stretch = System.Windows.Media.Stretch.Uniform
                 };
@@ -308,19 +395,136 @@ namespace LiveChat.WPF
                 {
                     videoWindow.Close();
                     CurrentMediaWindow = null;
+                    tcs.SetResult(true);
                 };
 
                 CurrentMediaWindow = videoWindow;
                 videoWindow.Show();
 
-                // Démarrer la lecture
-                mediaElement.Play();
+                // Attendre que le MediaElement soit chargé avant de lancer la lecture
+                mediaElement.Loaded += (s, e) =>
+                {
+                    mediaElement.Play();
+                };
             }
             catch (Exception ex)
             {
                 Logger.Error($"Error displaying video: {ex.Message}");
                 MessageBox.Show($"Error displaying video: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                tcs.SetException(ex);
             }
+
+            return tcs.Task;
+        }
+
+        private Task DisplayGif(string filePath)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+
+            try
+            {
+                if (CurrentMediaWindow != null)
+                {
+                    CurrentMediaWindow.Close();
+                }
+
+                var imageWindow = new Window
+                {
+                    WindowStyle = WindowStyle.None,
+                    AllowsTransparency = true,
+                    Background = null,
+                    Topmost = true,
+                    WindowState = WindowState.Maximized
+                };
+
+                var grid = new System.Windows.Controls.Grid();
+
+                var viewbox = new System.Windows.Controls.Viewbox
+                {
+                    Stretch = System.Windows.Media.Stretch.Uniform,
+                    MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
+                    MaxHeight = SystemParameters.PrimaryScreenHeight * 0.75,
+                    StretchDirection = StretchDirection.Both
+                };
+
+                var innerGrid = new Grid();
+
+                // Configurer le BitmapImage spécifiquement pour les GIFs
+                var gifImage = new System.Windows.Media.Imaging.BitmapImage();
+                gifImage.BeginInit();
+                gifImage.UriSource = new Uri(filePath);
+                gifImage.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                // Activer l'animation du GIF
+                gifImage.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
+                gifImage.EndInit();
+
+                var image = new System.Windows.Controls.Image
+                {
+                    Source = gifImage,
+                    Stretch = System.Windows.Media.Stretch.Uniform
+                };
+
+                innerGrid.Children.Add(image);
+
+                string caption = null;
+                if (filePath.Contains("text="))
+                {
+                    caption = filePath.Split('=')[1].Split('.')[0];
+                }
+
+                if (caption != null)
+                {
+                    var textBlock = new System.Windows.Controls.TextBlock
+                    {
+                        Text = caption,
+                        FontSize = 48,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = System.Windows.Media.Brushes.White,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Bottom,
+                        TextAlignment = TextAlignment.Center,
+                        Background = new System.Windows.Media.SolidColorBrush(
+                            System.Windows.Media.Color.FromArgb(128, 0, 0, 0)),
+                        Padding = new Thickness(20, 10, 20, 10),
+                        Margin = new Thickness(0, 0, 0, 20)
+                    };
+
+                    innerGrid.Children.Add(textBlock);
+                }
+
+                viewbox.Child = innerGrid;
+                grid.Children.Add(viewbox);
+
+                imageWindow.Content = grid;
+
+                int displayDuration = Utils.SafeParseInt(ConfigurationManager.AppSettings["ImageDisplayDuration"]) * 1000;
+
+                CurrentMediaWindow = imageWindow;
+                imageWindow.Show();
+
+                var timer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(displayDuration)
+                };
+
+                timer.Tick += (s, e) =>
+                {
+                    timer.Stop();
+                    imageWindow.Close();
+                    CurrentMediaWindow = null;
+                    tcs.SetResult(true);
+                };
+
+                timer.Start();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error displaying GIF: {ex.Message}");
+                MessageBox.Show($"Error displaying GIF: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                tcs.SetException(ex);
+            }
+
+            return tcs.Task;
         }
 
         private void CleanupLiveChatSwapFolder()
