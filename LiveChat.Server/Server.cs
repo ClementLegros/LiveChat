@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Excepts;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -88,12 +89,21 @@ namespace LiveChat.Server
                 byte[] fileNameBytes = new byte[fileNameLength];
                 await stream.ReadAsync(fileNameBytes, 0, fileNameLength);
                 string fileName = Encoding.UTF8.GetString(fileNameBytes);
+
+                if (fileName == null) return;
+                
+                // Lire la longueur de la caption
+                byte[] captionLengthBytes = new byte[4];
+                await stream.ReadAsync(captionLengthBytes, 0, 4);
+                int captionLength = BitConverter.ToInt32(captionLengthBytes, 0);
+
                 string caption = null;
-                if (fileName.Contains("text="))
+                if (captionLength > 0)
                 {
-                    string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
-                    string[] fileNameParts = fileNameWithoutExtension.Split('=');
-                    caption = fileNameParts[1];
+                    // Lire la caption
+                    byte[] captionBytes = new byte[captionLength];
+                    await stream.ReadAsync(captionBytes, 0, captionLength);
+                    caption = Encoding.UTF8.GetString(captionBytes);
                 }
 
                 using (MemoryStream ms = new MemoryStream())
@@ -102,36 +112,52 @@ namespace LiveChat.Server
                     byte[] encryptedBytes = ms.ToArray();
                     byte[] fileBytes = DecryptData(encryptedBytes);
                     string fileType = GetFileType(fileBytes);
-                    string randomFileName = caption == null ? $"{Guid.NewGuid()}.{fileType}" : $"{Guid.NewGuid()}-text={caption}.{fileType}";
-
+                    if (!IsValidFileType(fileType))
+                    {
+                        Logger.Warning($"Rejected file of unknown type");
+                        return;
+                    }
+                    
+                    // Créer un nom de fichier unique sans la caption
+                    string randomFileName = $"{Guid.NewGuid()}.{fileType}";
                     string liveChatFolderPath = Path.GetTempPath() + $@"LiveChat\{randomFileName}";
                     
+                    // Sauvegarder le fichier
                     File.WriteAllBytes(liveChatFolderPath, fileBytes);
-                    Logger.Info($"{fileType.ToUpper()} file received and saved."); 
+
+                    // Si une caption existe, créer un fichier metadata associé
+                    if (!string.IsNullOrEmpty(caption))
+                    {
+                        string metadataPath = liveChatFolderPath + ".metadata";
+                        File.WriteAllText(metadataPath, caption);
+                    }
+                    
+                    Logger.Info($"{fileType.ToUpper()} file received and saved with caption."); 
                 }
             }
+
+            await CleanupOldFiles(Path.GetTempPath() + @"LiveChat\", TimeSpan.FromHours(24));
         }
         
-        public async Task SendFileToMultipleIPs(string filePath, List<string> ipAddresses, int port, string fileName)
+        public async Task SendFileToMultipleIPs(string filePath, List<string> ipAddresses, int port, string fileName, string caption = null)
         {
             byte[] fileBytes = File.ReadAllBytes(filePath);
             List<Task> sendTasks = new List<Task>();
 
             foreach (var ipAddress in ipAddresses)
             {
-                sendTasks.Add(SendFile(fileBytes, ipAddress, port, fileName));
+                sendTasks.Add(SendFile(fileBytes, ipAddress, port, fileName, caption));
             }
 
             await Task.WhenAll(sendTasks);
         }
 
-        private async Task SendFile(byte[] fileBytes, string ipAddress, int port, string fileName)
+        private async Task SendFile(byte[] fileBytes, string ipAddress, int port, string fileName, string caption = null)
         {
             try
             {
                 using (TcpClient client = new TcpClient())
                 {
-                    // Timeout de connexion de 5 secondes
                     var connectTask = client.ConnectAsync(ipAddress, port);
                     if (await Task.WhenAny(connectTask, Task.Delay(5000)) != connectTask)
                     {
@@ -140,12 +166,23 @@ namespace LiveChat.Server
 
                     using (NetworkStream stream = client.GetStream())
                     {
+                        // Envoyer le nom du fichier
                         byte[] fileNameBytes = Encoding.UTF8.GetBytes(fileName);
                         byte[] fileNameLength = BitConverter.GetBytes(fileNameBytes.Length);
-                        byte[] encryptedFileBytes = EncryptData(fileBytes);
-                        
                         await stream.WriteAsync(fileNameLength, 0, 4);
                         await stream.WriteAsync(fileNameBytes, 0, fileNameBytes.Length);
+
+                        // Envoyer la caption
+                        byte[] captionBytes = caption != null ? Encoding.UTF8.GetBytes(caption) : new byte[0];
+                        byte[] captionLength = BitConverter.GetBytes(captionBytes.Length);
+                        await stream.WriteAsync(captionLength, 0, 4);
+                        if (captionBytes.Length > 0)
+                        {
+                            await stream.WriteAsync(captionBytes, 0, captionBytes.Length);
+                        }
+
+                        // Envoyer le fichier
+                        byte[] encryptedFileBytes = EncryptData(fileBytes);
                         await stream.WriteAsync(encryptedFileBytes, 0, encryptedFileBytes.Length);
                         
                         Logger.Info($"Fichier envoyé avec succès à {ipAddress}:{port}");
@@ -155,7 +192,6 @@ namespace LiveChat.Server
             catch (Exception ex)
             {
                 Logger.Error($"Erreur lors de l'envoi du fichier à {ipAddress}:{port}: {ex.Message}");
-                // On ne relance pas l'exception pour ne pas faire planter l'application
             }
         }
         
@@ -178,6 +214,12 @@ namespace LiveChat.Server
                     return "mp4";
             }
             return "unknown";
+        }
+
+        private bool IsValidFileType(string fileType)
+        {
+            var allowedTypes = new[] { "jpg", "png", "gif", "mp4" };
+            return allowedTypes.Contains(fileType.ToLower());
         }
 
         private byte[] EncryptData(byte[] data)
@@ -260,6 +302,29 @@ namespace LiveChat.Server
                 IpAddress = ipAddress, 
                 IsConnected = isConnected 
             });
+        }
+
+        private async Task CleanupOldFiles(string folderPath, TimeSpan maxAge)
+        {
+            try
+            {
+                var directory = new DirectoryInfo(folderPath);
+                var files = directory.GetFiles();
+                var cutoffTime = DateTime.Now - maxAge;
+
+                foreach (var file in files)
+                {
+                    if (file.CreationTime < cutoffTime)
+                    {
+                        file.Delete();
+                        Logger.Info($"Cleaned up old file: {file.Name}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Error during cleanup: {ex.Message}");
+            }
         }
     }
 }

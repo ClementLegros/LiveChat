@@ -11,7 +11,7 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace LiveChat.WPF
+namespace LiveChat.Client
 {
     /// <summary>
     /// Logique d'interaction pour App.xaml

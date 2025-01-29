@@ -11,11 +11,15 @@ using Microsoft.Win32;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using WpfAnimatedGif;
-using System.Net.Sockets;
 using System.Windows.Threading;
 using LiveChat.Server;
+using System.ComponentModel;  // Add this for CancelEventArgs
+using System.Drawing;
+using Hardcodet.Wpf.TaskbarNotification;
+using System.Windows.Input;
+using Image = System.Windows.Controls.Image;
 
-namespace LiveChat.WPF
+namespace LiveChat.Client
 {
     public partial class MainWindow : Window
     {
@@ -25,9 +29,11 @@ namespace LiveChat.WPF
         private string LiveChatFolderPath { get; set; }
         private string LiveChatSwapFolderPath { get; set; }
         private Window CurrentMediaWindow { get; set; }
-        private Queue<string> MediaQueue { get; set; }
+        private Queue<MediaItem> MediaQueue { get; set; }
         private bool IsDisplayingMedia { get; set; }
         private DispatcherTimer _connectionCheckTimer;
+        private TaskbarIcon _notifyIcon;
+        private bool _isClosing;
 
         public MainWindow()
         {
@@ -36,10 +42,11 @@ namespace LiveChat.WPF
             InitializeListBoxUsers();
             CleanupLiveChatSwapFolder();
             InitRandomLiveChatWallpaper();
-            StartServer();
-            MediaQueue = new Queue<string>();
+            _ = StartServer();
+            MediaQueue = new Queue<MediaItem>();
             IsDisplayingMedia = false;
             InitializeConnectionChecker();
+            InitializeTrayIcon();
         }
 
         private void InitializeListBoxUsers()
@@ -86,17 +93,7 @@ namespace LiveChat.WPF
             }
 
             string filePath = openFileDialog.FileName;
-
-            if (!string.IsNullOrEmpty(textBoxCaption.Text))
-            {
-                string directory = LiveChatSwapFolderPath;
-                string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
-                string extension = Path.GetExtension(filePath);
-                string newFileName = fileNameWithoutExtension + $"-text={textBoxCaption.Text}" + extension;
-                string newFilePath = Path.Combine(directory, newFileName);
-                File.Copy(filePath, newFilePath);
-                filePath = newFilePath;
-            }
+            string caption = textBoxCaption.Text;
 
             List<string> ipList = new List<string>();
 
@@ -108,7 +105,6 @@ namespace LiveChat.WPF
                 foreach (string ipConfig in ipListConfig)
                 {
                     string[] ipSplit = ipConfig.Split('-');
-
                     if (ipSplit.Length == 0) continue;
                     ipList.Add(ipSplit[1]);
                 }
@@ -121,8 +117,10 @@ namespace LiveChat.WPF
                     ipList.Add(user.IpAddress);
                 }
             }
+
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
-            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath);
+            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath, 
+                !string.IsNullOrEmpty(caption) ? caption : null);
             CleanupLiveChatSwapFolder();
             Logger.Leave();
         }
@@ -163,7 +161,24 @@ namespace LiveChat.WPF
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 string filePath = e.FullPath;
-                MediaQueue.Enqueue(filePath);
+                
+                // Ignorer les fichiers .metadata
+                if (filePath.EndsWith(".metadata"))
+                    return;
+
+                // Lire la caption si elle existe
+                string caption = null;
+                string metadataPath = filePath + ".metadata";
+                if (File.Exists(metadataPath))
+                {
+                    caption = File.ReadAllText(metadataPath);
+                    // Supprimer le fichier metadata après lecture
+                    try { File.Delete(metadataPath); } catch { }
+                }
+
+                // Ajouter le fichier et sa caption à la queue
+                MediaQueue.Enqueue(new MediaItem { FilePath = filePath, Caption = caption });
+                
                 if (!IsDisplayingMedia)
                 {
                     ProcessNextMedia();
@@ -179,21 +194,21 @@ namespace LiveChat.WPF
             }
 
             IsDisplayingMedia = true;
-            string filePath = MediaQueue.Dequeue();
+            var mediaItem = MediaQueue.Dequeue();
 
             try
             {
-                if (filePath.EndsWith(".mp4"))
+                if (mediaItem.FilePath.EndsWith(".mp4"))
                 {
-                    await DisplayVideo(filePath);
+                    await DisplayVideo(mediaItem.FilePath, mediaItem.Caption);
                 }
-                else if (filePath.EndsWith(".gif"))
+                else if (mediaItem.FilePath.EndsWith(".gif"))
                 {
-                    await DisplayGif(filePath);
+                    await DisplayGif(mediaItem.FilePath, mediaItem.Caption);
                 }
                 else
                 {
-                    await DisplayImage(filePath);
+                    await DisplayImage(mediaItem.FilePath, mediaItem.Caption);
                 }
             }
             finally
@@ -206,7 +221,7 @@ namespace LiveChat.WPF
             }
         }
 
-        private Task DisplayImage(string filePath)
+        private Task DisplayImage(string filePath, string caption)
         {
             var tcs = new TaskCompletionSource<bool>();
 
@@ -247,12 +262,6 @@ namespace LiveChat.WPF
                 };
 
                 innerGrid.Children.Add(image);
-
-                string caption = null;
-                if (filePath.Contains("text="))
-                {
-                    caption = filePath.Split('=')[1].Split('.')[0];
-                }
 
                 if (caption != null)
                 {
@@ -309,7 +318,7 @@ namespace LiveChat.WPF
             return tcs.Task;
         }
 
-        private Task DisplayVideo(string filePath)
+        private Task DisplayVideo(string filePath, string caption)
         {
             var tcs = new TaskCompletionSource<bool>();
 
@@ -352,12 +361,6 @@ namespace LiveChat.WPF
                 };
 
                 innerGrid.Children.Add(mediaElement);
-
-                string caption = null;
-                if (filePath.Contains("text="))
-                {
-                    caption = filePath.Split('=')[1].Split('.')[0];
-                }
 
                 if (caption != null)
                 {
@@ -412,7 +415,7 @@ namespace LiveChat.WPF
             return tcs.Task;
         }
 
-        private Task DisplayGif(string filePath)
+        private Task DisplayGif(string filePath, string caption)
         {
             var tcs = new TaskCompletionSource<bool>();
 
@@ -458,12 +461,6 @@ namespace LiveChat.WPF
                 ImageBehavior.SetAnimatedSource(image, gifImage);
 
                 innerGrid.Children.Add(image);
-
-                string caption = null;
-                if (filePath.Contains("text="))
-                {
-                    caption = filePath.Split('=')[1].Split('.')[0];
-                }
 
                 if (caption != null)
                 {
@@ -530,6 +527,8 @@ namespace LiveChat.WPF
             }
 
             string[] files = Directory.GetFiles(liveChatWallpaper);
+            
+            if(files.Length == 0) return;
 
             Random random = new Random();
 
@@ -597,5 +596,76 @@ namespace LiveChat.WPF
                 LiveChatServer.ConnectionStateChanged -= OnConnectionStateChanged;
             }
         }
+
+        private void InitializeTrayIcon()
+        {
+            _notifyIcon = new Hardcodet.Wpf.TaskbarNotification.TaskbarIcon
+            {
+                Icon = new System.Drawing.Icon("TheBaldZoomer.ico"),
+                ToolTipText = "LiveChat",
+                MenuActivation = Hardcodet.Wpf.TaskbarNotification.PopupActivationMode.RightClick
+            };
+
+            // Create context menu
+            var contextMenu = new ContextMenu();
+            
+            var openMenuItem = new MenuItem { Header = "Open" };
+            openMenuItem.Click += (s, e) => 
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+            };
+            
+            var exitMenuItem = new MenuItem { Header = "Exit" };
+            exitMenuItem.Click += (s, e) => 
+            {
+                _isClosing = true;
+                Close();
+            };
+
+            contextMenu.Items.Add(openMenuItem);
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(exitMenuItem);
+
+            _notifyIcon.ContextMenu = contextMenu;
+            
+            _notifyIcon.DoubleClickCommand = new RelayCommand(() =>
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+            });
+        }
+
+        protected override void OnStateChanged(EventArgs e)
+        {
+            if (WindowState == WindowState.Minimized)
+            {
+                Hide();
+            }
+            base.OnStateChanged(e);
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            if (!_isClosing)
+            {
+                e.Cancel = true;
+                Hide();
+            }
+            else
+            {
+                _notifyIcon.Dispose();
+                base.OnClosing(e);
+            }
+        }
+    }
+
+    // Nouvelle classe pour stocker les informations du média
+    public class MediaItem
+    {
+        public string FilePath { get; set; }
+        public string Caption { get; set; }
     }
 }
