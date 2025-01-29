@@ -1,4 +1,4 @@
-namespace LiveChat.WPF
+﻿namespace LiveChat.Client
 {
     public class User
     {

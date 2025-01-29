@@ -11,9 +11,17 @@ using System.Security.Cryptography;
 
 namespace LiveChat.Server
 {
+    public class ConnectionStateChangedEventArgs : EventArgs
+    {
+        public string IpAddress { get; set; }
+        public bool IsConnected { get; set; }
+    }
+
     public class Server
     {
         private List<TcpListener> Listeners { get; set; }
+        private Dictionary<string, bool> ConnectionStates { get; set; }
+        public event EventHandler<ConnectionStateChangedEventArgs> ConnectionStateChanged;
 
         private static readonly byte[] AesKey = new byte[] 
         { 
@@ -32,6 +40,7 @@ namespace LiveChat.Server
         public Server()
         {
             Listeners = new List<TcpListener>();
+            ConnectionStates = new Dictionary<string, bool>();
         }
 
         public async Task StartServer(int port)
@@ -118,20 +127,35 @@ namespace LiveChat.Server
 
         private async Task SendFile(byte[] fileBytes, string ipAddress, int port, string fileName)
         {
-            using (TcpClient client = new TcpClient(ipAddress, port))
+            try
             {
-                using (NetworkStream stream = client.GetStream())
+                using (TcpClient client = new TcpClient())
                 {
-                    byte[] fileNameBytes = Encoding.UTF8.GetBytes(fileName);
-                    byte[] fileNameLength = BitConverter.GetBytes(fileNameBytes.Length);
-                    byte[] encryptedFileBytes = EncryptData(fileBytes);
-                    
-                    await stream.WriteAsync(fileNameLength, 0, 4);
-                    await stream.WriteAsync(fileNameBytes, 0, fileNameBytes.Length);
-                    await stream.WriteAsync(encryptedFileBytes, 0, encryptedFileBytes.Length);
-                    
-                    Logger.Info($"Encrypted file sent to {ipAddress}:{port}");
+                    // Timeout de connexion de 5 secondes
+                    var connectTask = client.ConnectAsync(ipAddress, port);
+                    if (await Task.WhenAny(connectTask, Task.Delay(5000)) != connectTask)
+                    {
+                        throw new TimeoutException($"La connexion à {ipAddress}:{port} a expiré");
+                    }
+
+                    using (NetworkStream stream = client.GetStream())
+                    {
+                        byte[] fileNameBytes = Encoding.UTF8.GetBytes(fileName);
+                        byte[] fileNameLength = BitConverter.GetBytes(fileNameBytes.Length);
+                        byte[] encryptedFileBytes = EncryptData(fileBytes);
+                        
+                        await stream.WriteAsync(fileNameLength, 0, 4);
+                        await stream.WriteAsync(fileNameBytes, 0, fileNameBytes.Length);
+                        await stream.WriteAsync(encryptedFileBytes, 0, encryptedFileBytes.Length);
+                        
+                        Logger.Info($"Fichier envoyé avec succès à {ipAddress}:{port}");
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Erreur lors de l'envoi du fichier à {ipAddress}:{port}: {ex.Message}");
+                // On ne relance pas l'exception pour ne pas faire planter l'application
             }
         }
         
@@ -192,6 +216,50 @@ namespace LiveChat.Server
                     return msDecrypt.ToArray();
                 }
             }
+        }
+
+        public async Task CheckConnectionsAsync(List<string> ipAddresses, int port)
+        {
+            foreach (var ipAddress in ipAddresses)
+            {
+                bool isConnected = await IsHostAvailable(ipAddress, port);
+                
+                // Si l'état a changé ou n'existait pas
+                if (!ConnectionStates.ContainsKey(ipAddress) || ConnectionStates[ipAddress] != isConnected)
+                {
+                    ConnectionStates[ipAddress] = isConnected;
+                    OnConnectionStateChanged(ipAddress, isConnected);
+                }
+            }
+        }
+
+        private async Task<bool> IsHostAvailable(string ipAddress, int port)
+        {
+            try
+            {
+                using (var client = new TcpClient())
+                {
+                    var connectTask = client.ConnectAsync(ipAddress, port);
+                    if (await Task.WhenAny(connectTask, Task.Delay(1000)) == connectTask)
+                    {
+                        return true;
+                    }
+                    return false;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void OnConnectionStateChanged(string ipAddress, bool isConnected)
+        {
+            ConnectionStateChanged?.Invoke(this, new ConnectionStateChangedEventArgs 
+            { 
+                IpAddress = ipAddress, 
+                IsConnected = isConnected 
+            });
         }
     }
 }

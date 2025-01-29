@@ -9,12 +9,14 @@ using CalSup.Utilities;
 using CalSup.Utilities.Excepts;
 using Microsoft.Win32;
 using System.Threading.Tasks;
+using System.Windows.Media.Imaging;
+using WpfAnimatedGif;
+using System.Net.Sockets;
+using System.Windows.Threading;
+using LiveChat.Server;
 
 namespace LiveChat.WPF
 {
-    /// <summary>
-    /// Logique d'interaction pour MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         private Server.Server LiveChatServer { get; set; }
@@ -25,19 +27,19 @@ namespace LiveChat.WPF
         private Window CurrentMediaWindow { get; set; }
         private Queue<string> MediaQueue { get; set; }
         private bool IsDisplayingMedia { get; set; }
+        private DispatcherTimer _connectionCheckTimer;
 
         public MainWindow()
         {
             InitializeComponent();
             InitializeFileSystemWatcher();
-            StartServer();
             InitializeListBoxUsers();
             CleanupLiveChatSwapFolder();
+            InitRandomLiveChatWallpaper();
+            StartServer();
             MediaQueue = new Queue<string>();
             IsDisplayingMedia = false;
-            
-            // Load Amelie image if needed
-            // pictureBoxAmelie.Source = new BitmapImage(new Uri("path_to_amelie_image.png", UriKind.Relative));
+            InitializeConnectionChecker();
         }
 
         private void InitializeListBoxUsers()
@@ -46,23 +48,23 @@ namespace LiveChat.WPF
             List<string> ipList = ipConfigString.Split(',').ToList();
 
             Users = new List<User>();
-            
             foreach (string ip in ipList)
             {
                 string[] ipSplit = ip.Split('-');
-                if(ipSplit.Length == 0) continue;
-                
-                Users.Add(new User
+                if (ipSplit.Length == 2) // Vérification que le split a bien donné 2 parties
                 {
-                    Username = ipSplit[0],
-                    IpAddress = ipSplit[1]
-                });
+                    Users.Add(new User
+                    {
+                        Username = ipSplit[0],
+                        IpAddress = ipSplit[1],
+                        IsConnected = false // État initial
+                    });
+                }
             }
-            
             listBoxUsers.ItemsSource = Users;
         }
 
-        private async void StartServer()
+        private async Task StartServer()
         {
             LiveChatServer = new Server.Server();
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
@@ -77,7 +79,6 @@ namespace LiveChat.WPF
         private async void ButtonSendFile_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new OpenFileDialog();
-            
             if (openFileDialog.ShowDialog() != true)
             {
                 MessageBox.Show("No file selected", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -85,18 +86,15 @@ namespace LiveChat.WPF
             }
 
             string filePath = openFileDialog.FileName;
-            
-            if(!string.IsNullOrEmpty(textBoxCaption.Text))
+
+            if (!string.IsNullOrEmpty(textBoxCaption.Text))
             {
                 string directory = LiveChatSwapFolderPath;
                 string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath);
                 string extension = Path.GetExtension(filePath);
-                
-                string newFileName = fileNameWithoutExtension+ $"-text={textBoxCaption.Text}" + extension;
+                string newFileName = fileNameWithoutExtension + $"-text={textBoxCaption.Text}" + extension;
                 string newFilePath = Path.Combine(directory, newFileName);
-                
                 File.Copy(filePath, newFilePath);
-                
                 filePath = newFilePath;
             }
 
@@ -110,9 +108,8 @@ namespace LiveChat.WPF
                 foreach (string ipConfig in ipListConfig)
                 {
                     string[] ipSplit = ipConfig.Split('-');
-                    
-                    if(ipSplit.Length == 0) continue;
-                    
+
+                    if (ipSplit.Length == 0) continue;
                     ipList.Add(ipSplit[1]);
                 }
             }
@@ -124,13 +121,9 @@ namespace LiveChat.WPF
                     ipList.Add(user.IpAddress);
                 }
             }
-  
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
-            
-            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath); 
-            
+            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath);
             CleanupLiveChatSwapFolder();
-            
             Logger.Leave();
         }
 
@@ -152,18 +145,17 @@ namespace LiveChat.WPF
             };
 
             Watcher.Created += OnLiveChatFolderChanged;
-            
+
             //To see how to deal with it
             //Watcher.Error += OnError;
-
             Watcher.EnableRaisingEvents = true;
 
             LiveChatSwapFolderPath = Path.GetTempPath() + @"LiveChatSwap\";
 
-            if(!Directory.Exists(LiveChatSwapFolderPath))
+            if (!Directory.Exists(LiveChatSwapFolderPath))
             {
                 Directory.CreateDirectory(LiveChatSwapFolderPath);
-            }    
+            }
         }
 
         private void OnLiveChatFolderChanged(object source, FileSystemEventArgs e)
@@ -337,9 +329,9 @@ namespace LiveChat.WPF
                     WindowState = WindowState.Maximized
                 };
 
-                var grid = new System.Windows.Controls.Grid();
+                var grid = new Grid();
 
-                var viewbox = new System.Windows.Controls.Viewbox
+                var viewbox = new Viewbox
                 {
                     Stretch = System.Windows.Media.Stretch.Uniform,
                     MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
@@ -352,9 +344,11 @@ namespace LiveChat.WPF
                 var mediaElement = new MediaElement
                 {
                     Source = new Uri(filePath),
-                    LoadedBehavior = MediaState.Manual,
+                    LoadedBehavior = MediaState.Play,
                     UnloadedBehavior = MediaState.Close,
-                    Stretch = System.Windows.Media.Stretch.Uniform
+                    Stretch = System.Windows.Media.Stretch.Uniform,
+                    Volume = 1,
+                    IsMuted = false
                 };
 
                 innerGrid.Children.Add(mediaElement);
@@ -367,7 +361,7 @@ namespace LiveChat.WPF
 
                 if (caption != null)
                 {
-                    var textBlock = new System.Windows.Controls.TextBlock
+                    var textBlock = new TextBlock
                     {
                         Text = caption,
                         FontSize = 48,
@@ -390,7 +384,6 @@ namespace LiveChat.WPF
 
                 videoWindow.Content = grid;
 
-                // Gérer la fin de la vidéo
                 mediaElement.MediaEnded += (s, e) =>
                 {
                     videoWindow.Close();
@@ -398,14 +391,16 @@ namespace LiveChat.WPF
                     tcs.SetResult(true);
                 };
 
+                mediaElement.MediaFailed += (s, e) =>
+                {
+                    MessageBox.Show($"Media Failed: {e.ErrorException.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    videoWindow.Close();
+                    CurrentMediaWindow = null;
+                    tcs.SetException(e.ErrorException);
+                };
+
                 CurrentMediaWindow = videoWindow;
                 videoWindow.Show();
-
-                // Attendre que le MediaElement soit chargé avant de lancer la lecture
-                mediaElement.Loaded += (s, e) =>
-                {
-                    mediaElement.Play();
-                };
             }
             catch (Exception ex)
             {
@@ -437,9 +432,8 @@ namespace LiveChat.WPF
                     WindowState = WindowState.Maximized
                 };
 
-                var grid = new System.Windows.Controls.Grid();
-
-                var viewbox = new System.Windows.Controls.Viewbox
+                var grid = new Grid();
+                var viewbox = new Viewbox
                 {
                     Stretch = System.Windows.Media.Stretch.Uniform,
                     MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
@@ -449,20 +443,19 @@ namespace LiveChat.WPF
 
                 var innerGrid = new Grid();
 
-                // Configurer le BitmapImage spécifiquement pour les GIFs
-                var gifImage = new System.Windows.Media.Imaging.BitmapImage();
-                gifImage.BeginInit();
-                gifImage.UriSource = new Uri(filePath);
-                gifImage.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                // Activer l'animation du GIF
-                gifImage.CreateOptions = System.Windows.Media.Imaging.BitmapCreateOptions.IgnoreImageCache;
-                gifImage.EndInit();
-
-                var image = new System.Windows.Controls.Image
+                var image = new Image
                 {
-                    Source = gifImage,
                     Stretch = System.Windows.Media.Stretch.Uniform
                 };
+
+                // Création du BitmapImage pour le GIF
+                var gifImage = new BitmapImage();
+                gifImage.BeginInit();
+                gifImage.UriSource = new Uri(filePath);
+                gifImage.EndInit();
+
+                // Configuration de l'animation
+                ImageBehavior.SetAnimatedSource(image, gifImage);
 
                 innerGrid.Children.Add(image);
 
@@ -474,7 +467,7 @@ namespace LiveChat.WPF
 
                 if (caption != null)
                 {
-                    var textBlock = new System.Windows.Controls.TextBlock
+                    var textBlock = new TextBlock
                     {
                         Text = caption,
                         FontSize = 48,
@@ -494,7 +487,6 @@ namespace LiveChat.WPF
 
                 viewbox.Child = innerGrid;
                 grid.Children.Add(viewbox);
-
                 imageWindow.Content = grid;
 
                 int displayDuration = Utils.SafeParseInt(ConfigurationManager.AppSettings["ImageDisplayDuration"]) * 1000;
@@ -527,6 +519,27 @@ namespace LiveChat.WPF
             return tcs.Task;
         }
 
+        private void InitRandomLiveChatWallpaper()
+        {
+            string liveChatWallpaper = Directory.GetCurrentDirectory() + @"\LiveChatWallpaper";
+
+            if (!Directory.Exists(liveChatWallpaper))
+            {
+                Directory.CreateDirectory(liveChatWallpaper);
+                return;
+            }
+
+            string[] files = Directory.GetFiles(liveChatWallpaper);
+
+            Random random = new Random();
+
+            int randomIndex = random.Next(0, files.Length);
+
+            string randomSelectedWallpaper =  files[randomIndex];
+            
+            RandomPictureWallpaper.Source = new BitmapImage(new Uri(randomSelectedWallpaper));
+        }
+
         private void CleanupLiveChatSwapFolder()
         {
             Logger.Enter();
@@ -542,8 +555,47 @@ namespace LiveChat.WPF
             {
                 Logger.Error(e.Message);
             });
-            
             Logger.Leave();
+        }
+
+        private void InitializeConnectionChecker()
+        {
+            _connectionCheckTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(10)
+            };
+            _connectionCheckTimer.Tick += async (s, e) => await CheckConnections();
+            LiveChatServer.ConnectionStateChanged += OnConnectionStateChanged;
+            _connectionCheckTimer.Start();
+        }
+
+        private async Task CheckConnections()
+        {
+            var ipAddresses = Users.Select(u => u.IpAddress).ToList();
+            int port = Utils.SafeParseInt(ConfigurationManager.AppSettings["LiveChatPort"]);
+            await LiveChatServer.CheckConnectionsAsync(ipAddresses, port);
+        }
+
+        private void OnConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
+        {
+            // Comme cet événement peut venir d'un autre thread, on utilise le Dispatcher
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var user = Users.FirstOrDefault(u => u.IpAddress == e.IpAddress);
+                if (user != null)
+                {
+                    user.IsConnected = e.IsConnected;
+                }
+            }));
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            if (LiveChatServer != null)
+            {
+                LiveChatServer.ConnectionStateChanged -= OnConnectionStateChanged;
+            }
         }
     }
 }

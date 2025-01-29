@@ -20,7 +20,20 @@
                      Height="164"
                      FontSize="12"
                      SelectionMode="Multiple"
-                     Margin="5"/>
+                     Margin="5">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="10" Height="10" Margin="0,0,5,0">
+                                <Ellipse.Fill>
+                                    <SolidColorBrush Color="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"/>
+                                </Ellipse.Fill>
+                            </Ellipse>
+                            <TextBlock Text="{Binding Username}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
             
             <Label Content="Caption"/>
             
@@ -36,7 +49,7 @@
         </StackPanel>
 
         <Image Grid.Column="1"
-               x:Name="pictureBoxAmelie"
+               x:Name="RandomPictureWallpaper"
                Stretch="Uniform"
                Margin="10"/>
     </Grid>
