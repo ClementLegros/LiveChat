@@ -6,7 +6,7 @@ namespace LiveChat.Client
     {
         public string Username { get; set; }
         public string IpAddress { get; set; }
-        
+
         private bool _isConnected;
         public bool IsConnected
         {

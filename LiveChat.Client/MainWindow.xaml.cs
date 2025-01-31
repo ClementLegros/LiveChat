@@ -7,17 +7,19 @@ using System.Windows;
 using System.Windows.Controls;
 using CalSup.Utilities;
 using CalSup.Utilities.Excepts;
-using Microsoft.Win32;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
-using WpfAnimatedGif;
 using System.Windows.Threading;
 using LiveChat.Server;
-using System.ComponentModel;  // Add this for CancelEventArgs
-using System.Drawing;
+using System.ComponentModel;
+using System.Windows.Forms;
 using Hardcodet.Wpf.TaskbarNotification;
-using System.Windows.Input;
-using Image = System.Windows.Controls.Image;
+using System.Windows.Media;
+using System.Diagnostics;
+using ContextMenu = System.Windows.Controls.ContextMenu;
+using MenuItem = System.Windows.Controls.MenuItem;
+using MessageBox = System.Windows.MessageBox;
+using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
 
 namespace LiveChat.Client
 {
@@ -28,25 +30,34 @@ namespace LiveChat.Client
         private List<User> Users { get; set; }
         private string LiveChatFolderPath { get; set; }
         private string LiveChatSwapFolderPath { get; set; }
-        private Window CurrentMediaWindow { get; set; }
-        private Queue<MediaItem> MediaQueue { get; set; }
-        private bool IsDisplayingMedia { get; set; }
-        private DispatcherTimer _connectionCheckTimer;
-        private TaskbarIcon _notifyIcon;
-        private bool _isClosing;
+        private DispatcherTimer ConnectionCheckTimer { get; set; }
+        private TaskbarIcon NotifyIcon { get; set; }
+        private bool IsClosing { get; set; }
+        private bool IsDarkTheme { get; set; }
+        private bool UseMouseScreen { get; set; } = false;
+        private Screen SelectedScreen { get; set; } = Screen.PrimaryScreen;
+        private Media MediaManager { get; set; }
 
         public MainWindow()
         {
+            if (Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Length > 1)
+            {
+                MessageBox.Show("LiveChat is already running.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                IsClosing = true;
+                Close();
+                return;
+            }
+
             InitializeComponent();
             InitializeFileSystemWatcher();
             InitializeListBoxUsers();
             CleanupLiveChatSwapFolder();
             InitRandomLiveChatWallpaper();
             _ = StartServer();
-            MediaQueue = new Queue<MediaItem>();
-            IsDisplayingMedia = false;
+            MediaManager = new Media();
             InitializeConnectionChecker();
             InitializeTrayIcon();
+            InitializeTheme();
         }
 
         private void InitializeListBoxUsers()
@@ -58,13 +69,13 @@ namespace LiveChat.Client
             foreach (string ip in ipList)
             {
                 string[] ipSplit = ip.Split('-');
-                if (ipSplit.Length == 2) // Vérification que le split a bien donné 2 parties
+                if (ipSplit.Length == 2) 
                 {
                     Users.Add(new User
                     {
                         Username = ipSplit[0],
                         IpAddress = ipSplit[1],
-                        IsConnected = false // État initial
+                        IsConnected = false 
                     });
                 }
             }
@@ -78,14 +89,9 @@ namespace LiveChat.Client
             await LiveChatServer.StartServer(Utils.SafeParseInt(port));
         }
 
-        // ... Rest of the methods would be similar to the WinForms version but adapted for WPF ...
-        // You'll need to convert the Form displays to WPF Windows
-        // Replace OpenFileDialog with Microsoft.Win32.OpenFileDialog
-        // Replace Windows.Forms controls with WPF equivalents
-
         private async void ButtonSendFile_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog();
+            OpenFileDialog openFileDialog = new OpenFileDialog();
             if (openFileDialog.ShowDialog() != true)
             {
                 MessageBox.Show("No file selected", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -119,7 +125,7 @@ namespace LiveChat.Client
             }
 
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
-            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath, 
+            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath,
                 !string.IsNullOrEmpty(caption) ? caption : null);
             CleanupLiveChatSwapFolder();
             Logger.Leave();
@@ -144,8 +150,6 @@ namespace LiveChat.Client
 
             Watcher.Created += OnLiveChatFolderChanged;
 
-            //To see how to deal with it
-            //Watcher.Error += OnError;
             Watcher.EnableRaisingEvents = true;
 
             LiveChatSwapFolderPath = Path.GetTempPath() + @"LiveChatSwap\";
@@ -161,381 +165,51 @@ namespace LiveChat.Client
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 string filePath = e.FullPath;
-                
-                // Ignorer les fichiers .metadata
-                if (filePath.EndsWith(".metadata"))
+
+                if (filePath.EndsWith(".metadata") || filePath.EndsWith(".unknown"))
                     return;
 
-                // Lire la caption si elle existe
                 string caption = null;
                 string metadataPath = filePath + ".metadata";
                 if (File.Exists(metadataPath))
                 {
                     caption = File.ReadAllText(metadataPath);
-                    // Supprimer le fichier metadata après lecture
                     try { File.Delete(metadataPath); } catch { }
                 }
 
-                // Ajouter le fichier et sa caption à la queue
-                MediaQueue.Enqueue(new MediaItem { FilePath = filePath, Caption = caption });
-                
-                if (!IsDisplayingMedia)
-                {
-                    ProcessNextMedia();
-                }
+                MediaManager.EnqueueMedia(filePath, caption);
             }));
-        }
-
-        private async void ProcessNextMedia()
-        {
-            if (MediaQueue.Count == 0 || IsDisplayingMedia)
-            {
-                return;
-            }
-
-            IsDisplayingMedia = true;
-            var mediaItem = MediaQueue.Dequeue();
-
-            try
-            {
-                if (mediaItem.FilePath.EndsWith(".mp4"))
-                {
-                    await DisplayVideo(mediaItem.FilePath, mediaItem.Caption);
-                }
-                else if (mediaItem.FilePath.EndsWith(".gif"))
-                {
-                    await DisplayGif(mediaItem.FilePath, mediaItem.Caption);
-                }
-                else
-                {
-                    await DisplayImage(mediaItem.FilePath, mediaItem.Caption);
-                }
-            }
-            finally
-            {
-                IsDisplayingMedia = false;
-                if (MediaQueue.Count > 0)
-                {
-                    ProcessNextMedia();
-                }
-            }
-        }
-
-        private Task DisplayImage(string filePath, string caption)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-
-            try
-            {
-                if (CurrentMediaWindow != null)
-                {
-                    CurrentMediaWindow.Close();
-                }
-
-                var imageWindow = new Window
-                {
-                    WindowStyle = WindowStyle.None,
-                    AllowsTransparency = true,
-                    Background = null,
-                    Topmost = true,
-                    WindowState = WindowState.Maximized
-                };
-
-                var grid = new System.Windows.Controls.Grid();
-
-                // Un seul conteneur pour l'image et le texte superposé
-                var viewbox = new System.Windows.Controls.Viewbox
-                {
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                    MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
-                    MaxHeight = SystemParameters.PrimaryScreenHeight * 0.75,
-                    StretchDirection = StretchDirection.Both
-                };
-
-                // Grid interne pour superposer le texte sur l'image
-                var innerGrid = new Grid();
-
-                var image = new System.Windows.Controls.Image
-                {
-                    Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(filePath)),
-                    Stretch = System.Windows.Media.Stretch.Uniform
-                };
-
-                innerGrid.Children.Add(image);
-
-                if (caption != null)
-                {
-                    var textBlock = new System.Windows.Controls.TextBlock
-                    {
-                        Text = caption,
-                        FontSize = 48,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = System.Windows.Media.Brushes.White,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Bottom,
-                        TextAlignment = TextAlignment.Center,
-                        Background = new System.Windows.Media.SolidColorBrush(
-                            System.Windows.Media.Color.FromArgb(128, 0, 0, 0)),
-                        Padding = new Thickness(20, 10, 20, 10),
-                        Margin = new Thickness(0, 0, 0, 20)
-                    };
-
-                    innerGrid.Children.Add(textBlock);
-                }
-
-                viewbox.Child = innerGrid;
-                grid.Children.Add(viewbox);
-
-                imageWindow.Content = grid;
-
-                int displayDuration = Utils.SafeParseInt(ConfigurationManager.AppSettings["ImageDisplayDuration"]) * 1000;
-
-                CurrentMediaWindow = imageWindow;
-                imageWindow.Show();
-
-                var timer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(displayDuration)
-                };
-
-                timer.Tick += (s, e) =>
-                {
-                    timer.Stop();
-                    imageWindow.Close();
-                    CurrentMediaWindow = null;
-                    tcs.SetResult(true);
-                };
-
-                timer.Start();
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error displaying image: {ex.Message}");
-                MessageBox.Show($"Error displaying image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                tcs.SetException(ex);
-            }
-
-            return tcs.Task;
-        }
-
-        private Task DisplayVideo(string filePath, string caption)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-
-            try
-            {
-                if (CurrentMediaWindow != null)
-                {
-                    CurrentMediaWindow.Close();
-                }
-
-                var videoWindow = new Window
-                {
-                    WindowStyle = WindowStyle.None,
-                    AllowsTransparency = true,
-                    Background = null,
-                    Topmost = true,
-                    WindowState = WindowState.Maximized
-                };
-
-                var grid = new Grid();
-
-                var viewbox = new Viewbox
-                {
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                    MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
-                    MaxHeight = SystemParameters.PrimaryScreenHeight * 0.75,
-                    StretchDirection = StretchDirection.Both
-                };
-
-                var innerGrid = new Grid();
-
-                var mediaElement = new MediaElement
-                {
-                    Source = new Uri(filePath),
-                    LoadedBehavior = MediaState.Play,
-                    UnloadedBehavior = MediaState.Close,
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                    Volume = 1,
-                    IsMuted = false
-                };
-
-                innerGrid.Children.Add(mediaElement);
-
-                if (caption != null)
-                {
-                    var textBlock = new TextBlock
-                    {
-                        Text = caption,
-                        FontSize = 48,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = System.Windows.Media.Brushes.White,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Bottom,
-                        TextAlignment = TextAlignment.Center,
-                        Background = new System.Windows.Media.SolidColorBrush(
-                            System.Windows.Media.Color.FromArgb(128, 0, 0, 0)),
-                        Padding = new Thickness(20, 10, 20, 10),
-                        Margin = new Thickness(0, 0, 0, 20)
-                    };
-
-                    innerGrid.Children.Add(textBlock);
-                }
-
-                viewbox.Child = innerGrid;
-                grid.Children.Add(viewbox);
-
-                videoWindow.Content = grid;
-
-                mediaElement.MediaEnded += (s, e) =>
-                {
-                    videoWindow.Close();
-                    CurrentMediaWindow = null;
-                    tcs.SetResult(true);
-                };
-
-                mediaElement.MediaFailed += (s, e) =>
-                {
-                    MessageBox.Show($"Media Failed: {e.ErrorException.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    videoWindow.Close();
-                    CurrentMediaWindow = null;
-                    tcs.SetException(e.ErrorException);
-                };
-
-                CurrentMediaWindow = videoWindow;
-                videoWindow.Show();
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error displaying video: {ex.Message}");
-                MessageBox.Show($"Error displaying video: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                tcs.SetException(ex);
-            }
-
-            return tcs.Task;
-        }
-
-        private Task DisplayGif(string filePath, string caption)
-        {
-            var tcs = new TaskCompletionSource<bool>();
-
-            try
-            {
-                if (CurrentMediaWindow != null)
-                {
-                    CurrentMediaWindow.Close();
-                }
-
-                var imageWindow = new Window
-                {
-                    WindowStyle = WindowStyle.None,
-                    AllowsTransparency = true,
-                    Background = null,
-                    Topmost = true,
-                    WindowState = WindowState.Maximized
-                };
-
-                var grid = new Grid();
-                var viewbox = new Viewbox
-                {
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                    MaxWidth = SystemParameters.PrimaryScreenWidth * 0.75,
-                    MaxHeight = SystemParameters.PrimaryScreenHeight * 0.75,
-                    StretchDirection = StretchDirection.Both
-                };
-
-                var innerGrid = new Grid();
-
-                var image = new Image
-                {
-                    Stretch = System.Windows.Media.Stretch.Uniform
-                };
-
-                // Création du BitmapImage pour le GIF
-                var gifImage = new BitmapImage();
-                gifImage.BeginInit();
-                gifImage.UriSource = new Uri(filePath);
-                gifImage.EndInit();
-
-                // Configuration de l'animation
-                ImageBehavior.SetAnimatedSource(image, gifImage);
-
-                innerGrid.Children.Add(image);
-
-                if (caption != null)
-                {
-                    var textBlock = new TextBlock
-                    {
-                        Text = caption,
-                        FontSize = 48,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = System.Windows.Media.Brushes.White,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Bottom,
-                        TextAlignment = TextAlignment.Center,
-                        Background = new System.Windows.Media.SolidColorBrush(
-                            System.Windows.Media.Color.FromArgb(128, 0, 0, 0)),
-                        Padding = new Thickness(20, 10, 20, 10),
-                        Margin = new Thickness(0, 0, 0, 20)
-                    };
-
-                    innerGrid.Children.Add(textBlock);
-                }
-
-                viewbox.Child = innerGrid;
-                grid.Children.Add(viewbox);
-                imageWindow.Content = grid;
-
-                int displayDuration = Utils.SafeParseInt(ConfigurationManager.AppSettings["ImageDisplayDuration"]) * 1000;
-
-                CurrentMediaWindow = imageWindow;
-                imageWindow.Show();
-
-                var timer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(displayDuration)
-                };
-
-                timer.Tick += (s, e) =>
-                {
-                    timer.Stop();
-                    imageWindow.Close();
-                    CurrentMediaWindow = null;
-                    tcs.SetResult(true);
-                };
-
-                timer.Start();
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error displaying GIF: {ex.Message}");
-                MessageBox.Show($"Error displaying GIF: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                tcs.SetException(ex);
-            }
-
-            return tcs.Task;
         }
 
         private void InitRandomLiveChatWallpaper()
         {
+            Logger.Enter();
+
             string liveChatWallpaper = Directory.GetCurrentDirectory() + @"\LiveChatWallpaper";
 
             if (!Directory.Exists(liveChatWallpaper))
             {
+                Logger.Info("Create live chat wallpaper directory");
+
                 Directory.CreateDirectory(liveChatWallpaper);
+                Logger.Leave();
                 return;
             }
 
             string[] files = Directory.GetFiles(liveChatWallpaper);
-            
-            if(files.Length == 0) return;
+
+            if (files.Length == 0)
+            {
+                Logger.Info("No wallpaper found");
+                return;
+            }
 
             Random random = new Random();
 
             int randomIndex = random.Next(0, files.Length);
 
-            string randomSelectedWallpaper =  files[randomIndex];
-            
+            string randomSelectedWallpaper = files[randomIndex];
+
             RandomPictureWallpaper.Source = new BitmapImage(new Uri(randomSelectedWallpaper));
         }
 
@@ -559,25 +233,33 @@ namespace LiveChat.Client
 
         private void InitializeConnectionChecker()
         {
-            _connectionCheckTimer = new DispatcherTimer
+            Logger.Enter();
+
+            ConnectionCheckTimer = new DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(10)
             };
-            _connectionCheckTimer.Tick += async (s, e) => await CheckConnections();
+
+            ConnectionCheckTimer.Tick += async (s, e) => await CheckConnections();
             LiveChatServer.ConnectionStateChanged += OnConnectionStateChanged;
-            _connectionCheckTimer.Start();
+            ConnectionCheckTimer.Start();
+
+            Logger.Leave();
         }
 
         private async Task CheckConnections()
         {
-            var ipAddresses = Users.Select(u => u.IpAddress).ToList();
+            Logger.Enter();
+
+            List<string> ipAddresses = Users.Select(u => u.IpAddress).ToList();
             int port = Utils.SafeParseInt(ConfigurationManager.AppSettings["LiveChatPort"]);
             await LiveChatServer.CheckConnectionsAsync(ipAddresses, port);
+
+            Logger.Leave();
         }
 
         private void OnConnectionStateChanged(object sender, ConnectionStateChangedEventArgs e)
         {
-            // Comme cet événement peut venir d'un autre thread, on utilise le Dispatcher
             Dispatcher.BeginInvoke(new Action(() =>
             {
                 var user = Users.FirstOrDefault(u => u.IpAddress == e.IpAddress);
@@ -599,28 +281,30 @@ namespace LiveChat.Client
 
         private void InitializeTrayIcon()
         {
-            _notifyIcon = new Hardcodet.Wpf.TaskbarNotification.TaskbarIcon
+            Logger.Enter();
+
+            NotifyIcon = new Hardcodet.Wpf.TaskbarNotification.TaskbarIcon
             {
                 Icon = new System.Drawing.Icon("TheBaldZoomer.ico"),
                 ToolTipText = "LiveChat",
                 MenuActivation = Hardcodet.Wpf.TaskbarNotification.PopupActivationMode.RightClick
             };
 
-            // Create context menu
-            var contextMenu = new ContextMenu();
-            
-            var openMenuItem = new MenuItem { Header = "Open" };
-            openMenuItem.Click += (s, e) => 
+            ContextMenu contextMenu = new ContextMenu();
+
+            MenuItem openMenuItem = new MenuItem { Header = "Open" };
+
+            openMenuItem.Click += (s, e) =>
             {
                 Show();
                 WindowState = WindowState.Normal;
                 Activate();
             };
-            
+
             var exitMenuItem = new MenuItem { Header = "Exit" };
-            exitMenuItem.Click += (s, e) => 
+            exitMenuItem.Click += (s, e) =>
             {
-                _isClosing = true;
+                IsClosing = true;
                 Close();
             };
 
@@ -628,14 +312,16 @@ namespace LiveChat.Client
             contextMenu.Items.Add(new Separator());
             contextMenu.Items.Add(exitMenuItem);
 
-            _notifyIcon.ContextMenu = contextMenu;
-            
-            _notifyIcon.DoubleClickCommand = new RelayCommand(() =>
+            NotifyIcon.ContextMenu = contextMenu;
+
+            NotifyIcon.DoubleClickCommand = new RelayCommand(() =>
             {
                 Show();
                 WindowState = WindowState.Normal;
                 Activate();
             });
+
+            Logger.Leave();
         }
 
         protected override void OnStateChanged(EventArgs e)
@@ -649,23 +335,78 @@ namespace LiveChat.Client
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            if (!_isClosing)
+            if (!IsClosing)
             {
                 e.Cancel = true;
                 Hide();
             }
             else
             {
-                _notifyIcon.Dispose();
+                NotifyIcon?.Dispose();
                 base.OnClosing(e);
             }
         }
-    }
 
-    // Nouvelle classe pour stocker les informations du média
-    public class MediaItem
-    {
-        public string FilePath { get; set; }
-        public string Caption { get; set; }
+        private void InitializeTheme()
+        {
+            IsDarkTheme = IsSystemInDarkMode();
+            ApplyTheme(IsDarkTheme);
+        }
+
+        private bool IsSystemInDarkMode()
+        {
+            try
+            {
+                string registryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+                string registryValueName = "AppsUseLightTheme";
+
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(registryKeyPath))
+                {
+                    object registryValue = key?.GetValue(registryValueName);
+                    return registryValue != null && (int)registryValue == 0;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+        }
+
+        private void ApplyTheme(bool isDark)
+        {
+            IsDarkTheme = isDark;
+            ResourceDictionary themeDictionary = Resources.MergedDictionaries[0];
+            object newTheme = isDark ? themeDictionary["DarkTheme"] : themeDictionary["LightTheme"];
+
+            foreach (var key in ((ResourceDictionary)newTheme).Keys)
+            {
+                Resources[key] = ((ResourceDictionary)newTheme)[key];
+            }
+
+            themeIcon.Data = Geometry.Parse(isDark
+                ? "M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" // icône lune
+                : "M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"); // icône soleil
+        }
+
+        private void ThemeToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyTheme(!IsDarkTheme);
+        }
+
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var settingsWindow = new SettingsWindow(UseMouseScreen, SelectedScreen)
+            {
+                Owner = this
+            };
+
+            if (settingsWindow.ShowDialog() == true)
+            {
+                UseMouseScreen = settingsWindow.UseMouseScreen;
+                SelectedScreen = settingsWindow.SelectedScreen;
+                MediaManager.UpdateScreenSettings(UseMouseScreen, SelectedScreen);
+            }
+        }
     }
 }
