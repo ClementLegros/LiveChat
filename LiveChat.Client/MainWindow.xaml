@@ -109,6 +109,13 @@
                     Content="SELECT AND SEND FILE"
                     Height="75"
                     Click="ButtonSendFile_Click"/>
+
+            <!-- Ajout du nouveau bouton -->
+            <Button x:Name="buttonSelectGif"
+                    Content="SELECT AND SEND GIF"
+                    Height="75"
+                    Margin="0,10,0,0"
+                    Click="ButtonSelectGif_Click"/>
         </StackPanel>
 
         <Image Grid.Column="1"

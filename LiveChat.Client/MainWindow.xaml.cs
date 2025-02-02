@@ -131,6 +131,67 @@ namespace LiveChat.Client
             Logger.Leave();
         }
 
+        private async void ButtonSelectGif_Click(object sender, RoutedEventArgs e)
+        {
+            var gifSelector = new GifSelectorWindow
+            {
+                Owner = this
+            };
+
+            if (gifSelector.ShowDialog() == true)
+            {
+                string gifUrl = gifSelector.SelectedGifUrl;
+                string tempGifPath = Path.Combine(Path.GetTempPath(), $"LiveChat_temp_{Guid.NewGuid()}.gif");
+
+                try
+                {
+                    using (var client = new System.Net.WebClient())
+                    {
+                        await client.DownloadFileTaskAsync(gifUrl, tempGifPath);
+                    }
+
+                    string caption = textBoxCaption.Text;
+                    List<string> ipList = new List<string>();
+
+                    if (listBoxUsers.SelectedItems.Count == 0)
+                    {
+                        string ipConfigString = ConfigurationManager.AppSettings["LiveChatIpSender"];
+                        List<string> ipListConfig = ipConfigString.Split(',').ToList();
+
+                        foreach (string ipConfig in ipListConfig)
+                        {
+                            string[] ipSplit = ipConfig.Split('-');
+                            if (ipSplit.Length == 0) continue;
+                            ipList.Add(ipSplit[1]);
+                        }
+                    }
+                    else
+                    {
+                        List<User> users = listBoxUsers.SelectedItems.Cast<User>().ToList();
+                        foreach (User user in users)
+                        {
+                            ipList.Add(user.IpAddress);
+                        }
+                    }
+
+                    string port = ConfigurationManager.AppSettings["LiveChatPort"];
+                    await LiveChatServer.SendFileToMultipleIPs(tempGifPath, ipList, Utils.SafeParseInt(port), tempGifPath,
+                        !string.IsNullOrEmpty(caption) ? caption : null);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (File.Exists(tempGifPath))
+                        {
+                            File.Delete(tempGifPath);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
         private void InitializeFileSystemWatcher()
         {
             LiveChatFolderPath = Path.GetTempPath() + @"LiveChat\";
