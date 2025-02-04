@@ -22,7 +22,7 @@
                     </ResourceDictionary>
                     <!-- Dark Theme -->
                     <ResourceDictionary x:Key="DarkTheme">
-                        <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#2D2D2D"/>
+                        <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#121212"/>
                         <SolidColorBrush x:Key="BorderBrush" Color="#666666"/>
                         <SolidColorBrush x:Key="SelectedScreenBrush" Color="#3399FF"/>
                         <SolidColorBrush x:Key="ScreenBackgroundBrush" Color="#444444"/>

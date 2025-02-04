@@ -69,13 +69,13 @@ namespace LiveChat.Client
             foreach (string ip in ipList)
             {
                 string[] ipSplit = ip.Split('-');
-                if (ipSplit.Length == 2) 
+                if (ipSplit.Length == 2)
                 {
                     Users.Add(new User
                     {
                         Username = ipSplit[0],
                         IpAddress = ipSplit[1],
-                        IsConnected = false 
+                        IsConnected = false
                     });
                 }
             }
@@ -128,6 +128,8 @@ namespace LiveChat.Client
             await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath,
                 !string.IsNullOrEmpty(caption) ? caption : null);
             CleanupLiveChatSwapFolder();
+
+            textBoxCaption.Text = string.Empty;
             Logger.Leave();
         }
 
@@ -152,8 +154,8 @@ namespace LiveChat.Client
 
                     string caption = textBoxCaption.Text;
                     List<string> ipList = new List<string>();
-
                     if (listBoxUsers.SelectedItems.Count == 0)
+
                     {
                         string ipConfigString = ConfigurationManager.AppSettings["LiveChatIpSender"];
                         List<string> ipListConfig = ipConfigString.Split(',').ToList();
@@ -468,6 +470,24 @@ namespace LiveChat.Client
                 SelectedScreen = settingsWindow.SelectedScreen;
                 MediaManager.UpdateScreenSettings(UseMouseScreen, SelectedScreen);
             }
+        }
+
+        private void TitleBar_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == System.Windows.Input.MouseButton.Left)
+            {
+                DragMove();
+            }
+        }
+
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState.Minimized;
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
         }
     }
 }

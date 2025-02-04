@@ -3,124 +3,187 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:LiveChat.Client"
         mc:Ignorable="d"
-        Title="LiveChat" Height="535" Width="985"
+        Title="LiveChat" Height="600" Width="1025"
+        Margin="0"
+    WindowStyle="None"
+        AllowsTransparency="True"
+        BorderThickness="0"
         WindowStartupLocation="Manual">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- Thèmes existants -->
                 <ResourceDictionary>
-                    <!-- Light Theme -->
                     <ResourceDictionary x:Key="LightTheme">
                         <SolidColorBrush x:Key="BackgroundColor" Color="White"/>
                         <SolidColorBrush x:Key="ForegroundColor" Color="Black"/>
                         <SolidColorBrush x:Key="PanelBackgroundColor" Color="#FFFFFF"/>
+                        <SolidColorBrush x:Key="PanelBorderColor" Color="#95bfd2" />
+                        <SolidColorBrush x:Key="ButtonBackgroundColor" Color="White" />
+                        <!-- Element -->
+                        <SolidColorBrush x:Key="ElementBackgroundColor" Color="White" />
+                        <SolidColorBrush x:Key="ElementForegroundColor" Color="Black" />
+  
                     </ResourceDictionary>
-                    
-                    <!-- Dark Theme -->
                     <ResourceDictionary x:Key="DarkTheme">
                         <SolidColorBrush x:Key="BackgroundColor" Color="#121212"/>
                         <SolidColorBrush x:Key="ForegroundColor" Color="White"/>
                         <SolidColorBrush x:Key="PanelBackgroundColor" Color="#121212"/>
+                        <SolidColorBrush x:Key="PanelBorderColor" Color="#282828" />
+                        <SolidColorBrush x:Key="ButtonBackgroundColor" Color="#2d8eae" />
+                        <!-- Element -->
+                        <SolidColorBrush x:Key="ElementBackgroundColor" Color="#282828" />
+                        <SolidColorBrush x:Key="ElementForegroundColor" Color="White" />
                     </ResourceDictionary>
                 </ResourceDictionary>
             </ResourceDictionary.MergedDictionaries>
-            
-            <!-- Autres ressources existantes peuvent être ajoutées ici -->
         </ResourceDictionary>
     </Window.Resources>
-    
     <Grid Background="{DynamicResource BackgroundColor}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="370"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="32" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        
+        <!-- Custom Title Bar -->
+        <Grid Background="#2d8eae" MouseDown="TitleBar_MouseDown">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-        <!-- Bouton Theme -->
-        <Button x:Name="themeToggleButton"
-                Grid.Column="1"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top"
-                Width="30"
-                Height="30"
-                Margin="10"
-                Click="ThemeToggleButton_Click"
-                Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
-            <Path x:Name="themeIcon"
-                  Width="16"
-                  Height="16"
-                  Fill="{DynamicResource ForegroundColor}"
-                  Data="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
-        </Button>
+            <!-- Window Icon -->
+            <Image Source="TheBaldZoomer.ico" 
+                   Width="16" 
+                   Height="16" 
+                   Margin="8,0,4,0"
+                   VerticalAlignment="Center"/>
 
-        <!-- Après le bouton de thème -->
-        <Button x:Name="settingsButton"
-                Grid.Column="1"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Top"
-                Width="30"
-                Height="30"
-                Margin="10,10,50,10"
-                Click="SettingsButton_Click"
-                Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
-            <Path Width="16"
-                  Height="16"
-                  Fill="{DynamicResource ForegroundColor}"
-                  Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94 0 .32.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-        </Button>
+            <!-- Window Title -->
+            <TextBlock Text="LiveChat" 
+                      Grid.Column="1"
+                      Foreground="{DynamicResource ElementForegroundColor}"
+                      VerticalAlignment="Center"
+                      FontSize="14"/>
 
-        <StackPanel Grid.Column="0" 
+            <!-- Window Controls -->
+            <StackPanel Grid.Column="2" 
+                        Orientation="Horizontal">
+                <Button x:Name="themeToggleButton"
+                        Width="46" Height="32"
+                        Click="ThemeToggleButton_Click"
+                        Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+                    <Path x:Name="themeIcon"
+                          Width="32" Height="32"
+                          Margin="8,0,0,0"
+                          Fill="{DynamicResource ElementForegroundColor}"
+                          Data="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+                </Button>
+                <Button x:Name="settingsButton"
+                        Width="46" Height="32"
+                        Click="SettingsButton_Click"
+                        Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+                    <Path Width="32" Height="32"
+                          Margin="8,1,0,0"
+                          Fill="{DynamicResource ElementForegroundColor}"
+                          Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94 0 .32.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                </Button>
+                <Button x:Name="minimizeButton"
+                        Width="46" Height="32"
+                        Click="MinimizeButton_Click"
+                        Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+                    <Path Width="10" Height="1"
+                          Stroke="{DynamicResource ElementForegroundColor}"
+                          StrokeThickness="1"
+                          Data="M0,0 L10,0"/>
+                </Button>
+                <Button x:Name="closeButton"
+                        Width="46" Height="32"
+                        Click="CloseButton_Click"
+                        Style="{StaticResource {x:Static ToolBar.ButtonStyleKey}}">
+                    <Path Width="10" Height="10"
+                          Stroke="{DynamicResource ElementForegroundColor}"
+                          StrokeThickness="1"
+                          Data="M0,0 L10,10 M0,10 L10,0"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="370"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+        <Grid Margin="15">
+            <Border BorderBrush="{DynamicResource PanelBorderColor}" CornerRadius="8" BorderThickness="3">
+                <StackPanel 
                     Margin="10"
                     Background="{DynamicResource PanelBackgroundColor}">
-            <Label Content="Select Users" 
+                    <Label Content="Select Users" 
                    Foreground="{DynamicResource ForegroundColor}"/>
-            
-            <ListBox x:Name="listBoxUsers"
+
+                    <ListBox x:Name="listBoxUsers"
+                     Background="{DynamicResource ElementBackgroundColor}"
+                     Foreground="{DynamicResource ElementForegroundColor}"
                      Height="164"
                      FontSize="12"
                      SelectionMode="Multiple"
                      Margin="5">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="10" Height="10" Margin="0,0,5,0">
-                                <Ellipse.Fill>
-                                    <SolidColorBrush Color="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"/>
-                                </Ellipse.Fill>
-                            </Ellipse>
-                            <TextBlock Text="{Binding Username}"/>
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            
-            <Label Content="Caption" 
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="10" Height="10" Margin="0,0,5,0">
+                                        <Ellipse.Fill>
+                                            <SolidColorBrush Color="{Binding IsConnected, Converter={StaticResource BoolToColorConverter}}"/>
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding Username}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Label Content="Caption" 
                    Foreground="{DynamicResource ForegroundColor}"/>
-            
-            <TextBox x:Name="textBoxCaption"
+
+                    <TextBox x:Name="textBoxCaption"
+                     Background="{DynamicResource ElementBackgroundColor}"
+                     Foreground="{DynamicResource ElementForegroundColor}"
                      Height="26"/>
-            
-      <Label Content="Select a file"
+
+                    <Label Content="Select a file"
               Foreground="{DynamicResource ForegroundColor}"/>
-            
-            <Button x:Name="buttonSendFile"
+
+                    <Button x:Name="buttonSendFile"
+                    Background="{DynamicResource ButtonBackgroundColor}"
+                    Foreground="{DynamicResource ElementForegroundColor}"
                     Content="SELECT AND SEND FILE"
                     Height="75"
+                    Margin="0,10,0,0"
                     Click="ButtonSendFile_Click"/>
 
-            <!-- Ajout du nouveau bouton -->
-            <Button x:Name="buttonSelectGif"
+                    <Button x:Name="buttonSelectGif"
+                    Background="{DynamicResource ButtonBackgroundColor}"
+                    Foreground="{DynamicResource ElementForegroundColor}"
                     Content="SELECT AND SEND GIF"
                     Height="75"
                     Margin="0,10,0,0"
                     Click="ButtonSelectGif_Click"/>
-        </StackPanel>
-
-        <Image Grid.Column="1"
-               x:Name="RandomPictureWallpaper"
-               Stretch="Uniform"
-               Margin="10"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+        <Grid Margin="15" Grid.Column="1">
+            <Border BorderBrush="{DynamicResource PanelBorderColor}" CornerRadius="8" BorderThickness="3">
+                <Image
+                    x:Name="RandomPictureWallpaper"
+                    Stretch="Uniform"
+                    Margin="10"/>
+            </Border>
+        </Grid>
     </Grid>
-</Window>
+
+    </Grid>
+    </Window>
