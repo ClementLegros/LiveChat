@@ -9,8 +9,8 @@ using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using CalSup.Utilities;
-using CalSup.Utilities.Excepts;
+using LiveChat.Utilities;
+using LiveChat.Utilities.Excepts;
 using WpfAnimatedGif;
 using Color = System.Windows.Media.Color;
 using Control = System.Windows.Forms.Control;
@@ -139,7 +139,7 @@ namespace LiveChat.Client
 
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
 
-            Except.Try(() => 
+            Except.Try(() =>
             {
                 if (CurrentMediaWindow != null)
                 {

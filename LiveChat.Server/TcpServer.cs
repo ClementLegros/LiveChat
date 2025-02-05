@@ -5,7 +5,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
-using CalSup.Utilities;
 using System.Security.Cryptography;
 using LiveChat.Utilities;
 namespace LiveChat.Server
@@ -16,7 +15,7 @@ namespace LiveChat.Server
         public bool IsConnected { get; set; }
     }
 
-    public class TcpServer : IServer
+    public class TcpServer
     {
         private List<TcpListener> Listeners { get; set; }
         private Dictionary<string, bool> ConnectionStates { get; set; }
@@ -45,7 +44,7 @@ namespace LiveChat.Server
             ConnectionStates = new Dictionary<string, bool>();
         }
 
-        public async Task StarServer()
+        public async Task StartServer()
         {
             Logger.Enter();
             TcpListener listener = new TcpListener(IPAddress.Any, Port);

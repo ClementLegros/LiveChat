@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Reflection;
 
-namespace CalSup.Utilities
+namespace LiveChat.Utilities
 {
     public static class AppEnvironment
     {

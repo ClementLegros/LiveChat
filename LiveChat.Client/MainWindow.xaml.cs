@@ -5,8 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using CalSup.Utilities;
-using CalSup.Utilities.Excepts;
 using System.Threading.Tasks;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -20,12 +18,15 @@ using ContextMenu = System.Windows.Controls.ContextMenu;
 using MenuItem = System.Windows.Controls.MenuItem;
 using MessageBox = System.Windows.MessageBox;
 using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+using LiveChat.Utilities;
+using LiveChat.Utilities.Excepts;
 
 namespace LiveChat.Client
 {
     public partial class MainWindow : Window
     {
-        private Server.Server LiveChatServer { get; set; }
+        private TcpServer LiveChatTcpServer { get; set; }
+        private DiscordServer LiveChatDiscordServer { get; set; }
         private FileSystemWatcher Watcher { get; set; }
         private List<User> Users { get; set; }
         private string LiveChatFolderPath { get; set; }
@@ -53,7 +54,8 @@ namespace LiveChat.Client
             InitializeListBoxUsers();
             CleanupLiveChatSwapFolder();
             InitRandomLiveChatWallpaper();
-            _ = StartServer();
+            InitializeTcpIpServer().ConfigureAwait(false);
+            InitializeDiscordServer().ConfigureAwait(false);
             MediaManager = new Media();
             InitializeConnectionChecker();
             InitializeTrayIcon();
@@ -82,13 +84,53 @@ namespace LiveChat.Client
             listBoxUsers.ItemsSource = Users;
         }
 
-        private async Task StartServer()
+        private async Task StartTcpIpServer()
         {
-            LiveChatServer = new Server.Server();
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
-            await LiveChatServer.StartServer(Utils.SafeParseInt(port));
+            LiveChatTcpServer = new TcpServer()
+            {
+                Port = Utils.SafeParseInt(port)
+            };
+
+            await LiveChatTcpServer.StartServer();
         }
 
+        private async Task StartDiscordServer()
+        {
+            string token = ConfigurationManager.AppSettings["DiscordBotToken"];
+            string channelId = ConfigurationManager.AppSettings["ChannelId"];
+
+            LiveChatDiscordServer = new DiscordServer(token, Convert.ToUInt64(channelId));
+
+            await LiveChatDiscordServer.StartServer();
+        }
+
+        private async Task InitializeTcpIpServer()
+        {
+            try 
+            {
+                await StartTcpIpServer();
+                Logger.Info("Servers started successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to start servers: {ex.Message}");
+                MessageBox.Show($"Error starting servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        private async Task InitializeDiscordServer()
+        {
+            try 
+            {
+                await StartDiscordServer();
+                Logger.Info("Servers started successfully");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"Failed to start servers: {ex.Message}");
+                MessageBox.Show($"Error starting servers: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
         private async void ButtonSendFile_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog openFileDialog = new OpenFileDialog();
@@ -125,7 +167,7 @@ namespace LiveChat.Client
             }
 
             string port = ConfigurationManager.AppSettings["LiveChatPort"];
-            await LiveChatServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath,
+            await LiveChatTcpServer.SendFileToMultipleIPs(filePath, ipList, Utils.SafeParseInt(port), filePath,
                 !string.IsNullOrEmpty(caption) ? caption : null);
             CleanupLiveChatSwapFolder();
 
@@ -177,7 +219,7 @@ namespace LiveChat.Client
                     }
 
                     string port = ConfigurationManager.AppSettings["LiveChatPort"];
-                    await LiveChatServer.SendFileToMultipleIPs(tempGifPath, ipList, Utils.SafeParseInt(port), tempGifPath,
+                    await LiveChatTcpServer.SendFileToMultipleIPs(tempGifPath, ipList, Utils.SafeParseInt(port), tempGifPath,
                         !string.IsNullOrEmpty(caption) ? caption : null);
                 }
                 finally
@@ -304,7 +346,7 @@ namespace LiveChat.Client
             };
 
             ConnectionCheckTimer.Tick += async (s, e) => await CheckConnections();
-            LiveChatServer.ConnectionStateChanged += OnConnectionStateChanged;
+            LiveChatTcpServer.ConnectionStateChanged += OnConnectionStateChanged;
             ConnectionCheckTimer.Start();
 
             Logger.Leave();
@@ -316,7 +358,7 @@ namespace LiveChat.Client
 
             List<string> ipAddresses = Users.Select(u => u.IpAddress).ToList();
             int port = Utils.SafeParseInt(ConfigurationManager.AppSettings["LiveChatPort"]);
-            await LiveChatServer.CheckConnectionsAsync(ipAddresses, port);
+            await LiveChatTcpServer.CheckConnectionsAsync(ipAddresses, port);
 
             Logger.Leave();
         }
@@ -336,9 +378,9 @@ namespace LiveChat.Client
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
-            if (LiveChatServer != null)
+            if (LiveChatTcpServer != null)
             {
-                LiveChatServer.ConnectionStateChanged -= OnConnectionStateChanged;
+                LiveChatTcpServer.ConnectionStateChanged -= OnConnectionStateChanged;
             }
         }
 

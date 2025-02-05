@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace CalSup.Utilities
+namespace LiveChat.Utilities
 {
     public class DefaultException : Exception
     {

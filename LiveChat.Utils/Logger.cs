@@ -6,7 +6,7 @@ using System.IO;
 using System.Excepts;
 using System.Runtime.CompilerServices;
 
-namespace CalSup.Utilities
+namespace LiveChat.Utilities
 {
     public static class Logger
     {

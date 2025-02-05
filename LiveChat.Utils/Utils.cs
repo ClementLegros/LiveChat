@@ -5,8 +5,8 @@ using System.Globalization;
 using System.Collections;
 using Newtonsoft.Json;
 using System.Collections.Generic;
-
-namespace CalSup.Utilities
+using System.Linq;
+namespace LiveChat.Utilities
 {
     public static class Utils
     {
@@ -24,6 +24,34 @@ namespace CalSup.Utilities
                 return _TempFolder;
             }
         }
+
+        public static string GetFileType(byte[] fileBytes)
+        {
+            // Check for common file headers
+            if (fileBytes.Length > 4)
+            {
+                // JPEG
+                if (fileBytes[0] == 0xFF && fileBytes[1] == 0xD8 && fileBytes[2] == 0xFF)
+                    return "jpg";
+                // PNG
+                if (fileBytes[0] == 0x89 && fileBytes[1] == 0x50 && fileBytes[2] == 0x4E && fileBytes[3] == 0x47)
+                    return "png";
+                // GIF
+                if (fileBytes[0] == 0x47 && fileBytes[1] == 0x49 && fileBytes[2] == 0x46)
+                    return "gif";
+                // MP4
+                if (fileBytes[4] == 0x66 && fileBytes[5] == 0x74 && fileBytes[6] == 0x79 && fileBytes[7] == 0x70)
+                    return "mp4";
+            }
+            return "unknown";
+        }
+
+        public static bool IsValidFileType(string fileType)
+        {
+            var allowedTypes = new[] { "jpg", "png", "gif", "mp4" };
+            return allowedTypes.Contains(fileType.ToLower());
+        }
+
 
         public static double SafeParseDouble(string toParse)
         {
@@ -57,57 +85,6 @@ namespace CalSup.Utilities
             bool isParsed = bool.TryParse(toParse, out bool parsedValue);
 
             return isParsed ? parsedValue : false;
-        }
-
-        public static double GetInterpolatedValue(Dictionary<int, double> values, int index)
-        {
-            if (values.ContainsKey(index))
-            {
-                return values[index];
-            }
-
-            int lowerKey = int.MinValue;
-            int upperKey = int.MaxValue;
-
-            foreach (int key in values.Keys)
-            {
-                if (key < index && key > lowerKey)
-                {
-                    lowerKey = key;
-                }
-                if (key > index && key < upperKey)
-                {
-                    upperKey = key;
-                }
-            }
-
-            if (lowerKey == int.MinValue || upperKey == int.MaxValue)
-            {
-                throw new ArgumentException("Interpolation point is out of the range of the data");
-            }
-
-            double lowerValue = values[lowerKey];
-            double upperValue = values[upperKey];
-
-            return lowerValue + (upperValue - lowerValue) * (index - lowerKey) / (upperKey - lowerKey);
-        }
-
-        public static T[,] TransposeMatrix<T>(T[,] matrix)
-        {
-            int rows = matrix.GetLength(0);
-            int columns = matrix.GetLength(1);
-
-            T[,] result = new T[columns, rows];
-
-            for (int c = 0; c < columns; c++)
-            {
-                for (int r = 0; r < rows; r++)
-                {
-                    result[c, r] = matrix[r, c];
-                }
-            }
-
-            return result;
         }
 
         public static T GetBySubstring<T>(string stringToSearch) where T : IConvertible
@@ -182,7 +159,7 @@ namespace CalSup.Utilities
             }
 
             if (e.GetType().GetProperty("InnerExceptions") != null)
-            {           
+            {
                 foreach (Exception ex in ((AggregateException)e).InnerExceptions)
                 {
                     list.Add(ex);
@@ -197,40 +174,6 @@ namespace CalSup.Utilities
                 }
 
             }
-        }
-
-        public static string GetCaseByRc(string rc)
-        {
-            Logger.Enter();
-
-            string rstabCase = "";
-
-            switch(rc)
-            {
-                case "RC-1":
-                    rstabCase = "OAB";
-                    break;
-                case "RC-2":
-                    rstabCase = "C";
-                    break;
-                case "RC-3":
-                    rstabCase = "D";
-                    break;
-                case "RC-4":
-                    rstabCase = "ELUN";
-                    break;
-                case "RC-5":
-                    rstabCase = "ELUF";
-                    break;
-                case "RC-6":
-                    rstabCase = "STIFF";
-                    break;
-                default:
-                    Logger.Leave();
-                    throw new Exception("Error when finding the case by rc");
-            }
-
-            return rstabCase;
         }
     }
 }

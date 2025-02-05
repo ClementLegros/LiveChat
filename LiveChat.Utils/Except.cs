@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace CalSup.Utilities.Excepts
+namespace LiveChat.Utilities.Excepts
 {
     public static class Except
     {

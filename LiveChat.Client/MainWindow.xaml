@@ -23,7 +23,6 @@
                         <!-- Element -->
                         <SolidColorBrush x:Key="ElementBackgroundColor" Color="White" />
                         <SolidColorBrush x:Key="ElementForegroundColor" Color="Black" />
-  
                     </ResourceDictionary>
                     <ResourceDictionary x:Key="DarkTheme">
                         <SolidColorBrush x:Key="BackgroundColor" Color="#121212"/>
